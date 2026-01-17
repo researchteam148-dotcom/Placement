@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Download, ExternalLink, CheckCircle2, XCircle, Briefcase } from 'lucide-react';
-import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { Search, ExternalLink, CheckCircle2, XCircle } from 'lucide-react';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 
@@ -152,7 +152,7 @@ const RecruiterApplicantsPage = () => {
                                         <td className="px-6 py-4 text-slate-900 text-sm">{app.applicantEmail}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${app.status === 'Shortlisted' ? 'bg-emerald-100 text-emerald-700' :
-                                                    app.status === 'Pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                                                app.status === 'Pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
                                                 }`}>
                                                 {app.status}
                                             </span>

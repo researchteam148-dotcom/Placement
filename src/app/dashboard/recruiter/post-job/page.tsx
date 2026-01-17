@@ -5,7 +5,6 @@ import {
     Briefcase,
     Plus,
     MapPin,
-    DollarSign,
     Calendar,
     CheckCircle2,
     X,

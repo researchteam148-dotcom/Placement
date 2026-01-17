@@ -4,16 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
     BarChart3,
-    ShieldCheck,
     Users,
-    AlertCircle,
-    TrendingUp,
-    Download,
     Building2,
     Briefcase
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { collection, getCountFromServer, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { collection, getCountFromServer, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 const AdminDashboard = () => {
