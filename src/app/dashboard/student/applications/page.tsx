@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { FileText, Clock, CheckCircle2, XCircle, Search, Briefcase } from 'lucide-react';
 import { collection, query, getDocs } from 'firebase/firestore';
