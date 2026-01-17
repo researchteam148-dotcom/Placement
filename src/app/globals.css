@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f9fafb;
+  --foreground: #111827;
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.2);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@layer utilities {
+  .glass-card {
+    background-color: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(79, 70, 229, 0.05);
+  }
+
+  .glass-navbar {
+    background-color: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .mesh-gradient {
+    background-color: #f9fafb;
+    background-image:
+      radial-gradient(at 0% 0%, hsla(243, 75%, 97%, 1) 0, transparent 50%),
+      radial-gradient(at 50% 0%, hsla(245, 58%, 98%, 1) 0, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(243, 75%, 97%, 1) 0, transparent 50%);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-slate-900 to-indigo-600;
+  }
+
+  .glow-indigo {
+    box-shadow: 0 0 20px rgba(79, 70, 229, 0.12);
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
