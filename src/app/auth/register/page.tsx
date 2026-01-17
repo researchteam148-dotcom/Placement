@@ -11,7 +11,8 @@ import {
     Mail,
     User,
     Lock,
-    CheckCircle2
+    CheckCircle2,
+    ChevronLeft
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 

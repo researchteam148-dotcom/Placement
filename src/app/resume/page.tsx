@@ -63,9 +63,10 @@ const ResumeHub = () => {
     }, [user]);
 
     const deleteResume = async (id: string) => {
+        if (!user) return;
         if (!confirm('Are you sure you want to delete this resume?')) return;
         try {
-            await deleteDoc(doc(db, 'students', user.uid!, 'savedResumes', id));
+            await deleteDoc(doc(db, 'students', user.uid, 'savedResumes', id));
         } catch (error) {
             console.error("Error deleting resume:", error);
             alert("Failed to delete resume.");
@@ -146,7 +147,7 @@ const ResumeHub = () => {
             const result = await response.json();
 
             // Save result to Firestore so we don't have to re-analyze every time
-            await updateDoc(doc(db, 'students', user!.uid), {
+            await updateDoc(doc(db, 'students', user.uid), {
                 analysisResult: result
             });
 
