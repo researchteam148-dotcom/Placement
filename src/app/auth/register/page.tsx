@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const RegisterPage = () => {
+const RegisterContent = () => {
     const searchParams = useSearchParams();
     const initialRole = searchParams.get('role') === 'recruiter' ? 'recruiter' : 'student';
 
@@ -202,6 +202,18 @@ const RegisterPage = () => {
                 </div>
             </div>
         </div>
+    );
+};
+
+const RegisterPage = () => {
+    return (
+        <React.Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
+            </div>
+        }>
+            <RegisterContent />
+        </React.Suspense>
     );
 };
 
