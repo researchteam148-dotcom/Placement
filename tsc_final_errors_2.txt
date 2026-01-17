@@ -1,0 +1,1 @@
+src/app/dashboard/layout.tsx(5,21): error TS2307: Cannot find module '@/components/layout/Sidebar' or its corresponding type declarations.
