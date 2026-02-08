@@ -13,7 +13,6 @@ import {
     ChevronRight,
     TrendingUp,
     Building2,
-    RefreshingCw,
     ChevronLeft,
     RefreshCw
 } from 'lucide-react';
