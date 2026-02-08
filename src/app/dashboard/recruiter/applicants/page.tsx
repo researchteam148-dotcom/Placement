@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, ExternalLink, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, ExternalLink, CheckCircle2, XCircle, FileText } from 'lucide-react';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -125,63 +125,110 @@ const RecruiterApplicantsPage = () => {
                             {selectedJobId === 'all' ? "Please select a job to view applicants." : "No applications received yet for this role."}
                         </div>
                     ) : (
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                    <th className="px-6 py-4">Applicant</th>
-                                    <th className="px-6 py-4">Applied On</th>
-                                    <th className="px-6 py-4">Email</th>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {applications.map((app) => (
-                                    <tr key={app.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-600 text-xs uppercase">
-                                                    {(app.applicantName || 'U').charAt(0)}
-                                                </div>
-                                                <div className="font-bold text-slate-900">{app.applicantName || 'Unknown User'}</div>
+                        <div className="space-y-4">
+                            {applications.map((app) => (
+                                <div key={app.id} className="bg-white border border-slate-100 rounded-[32px] p-6 hover:shadow-lg transition-all">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-14 h-14 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-600 text-lg uppercase">
+                                                {(app.applicantName || 'U').charAt(0)}
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-600 text-sm">
-                                            {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : 'N/A'}
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-900 text-sm">{app.applicantEmail}</td>
-                                        <td className="px-6 py-4">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${app.status === 'Shortlisted' ? 'bg-emerald-100 text-emerald-700' :
+                                            <div>
+                                                <h3 className="font-black text-slate-900 text-lg">{app.applicantName || 'Unknown User'}</h3>
+                                                <p className="text-sm text-slate-500 font-medium">{app.applicantEmail}</p>
+                                                <p className="text-xs text-slate-400 font-bold mt-1">Applied {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider ${app.status === 'Shortlisted' ? 'bg-emerald-100 text-emerald-700' :
                                                 app.status === 'Pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
                                                 }`}>
                                                 {app.status}
                                             </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleUpdateStatus(app.id, app.applicantId, 'Shortlisted')}
-                                                    title="Shortlist"
-                                                    className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                                >
-                                                    <CheckCircle2 size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleUpdateStatus(app.id, app.applicantId, 'Rejected')}
-                                                    title="Reject"
-                                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                >
-                                                    <XCircle size={18} />
-                                                </button>
-                                                <button title="View Profile (Coming Soon)" className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
-                                                    <ExternalLink size={18} />
-                                                </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Student Details Grid */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 p-4 bg-slate-50 rounded-2xl">
+                                        {app.branch && (
+                                            <div>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Branch</p>
+                                                <p className="text-sm font-bold text-slate-900">{app.branch}</p>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        )}
+                                        {app.cgpa && (
+                                            <div>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">CGPA</p>
+                                                <p className="text-sm font-bold text-slate-900">{app.cgpa}</p>
+                                            </div>
+                                        )}
+                                        {app.backlogs !== undefined && (
+                                            <div>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Backlogs</p>
+                                                <p className={`text-sm font-bold ${app.backlogs === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                                    {app.backlogs}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {app.gradYear && (
+                                            <div>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Grad Year</p>
+                                                <p className="text-sm font-bold text-slate-900">{app.gradYear}</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Skills */}
+                                    {app.skills && app.skills.length > 0 && (
+                                        <div className="mb-4">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Skills</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {app.skills.map((skill: string, idx: number) => (
+                                                    <span key={idx} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold">
+                                                        {skill}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Actions */}
+                                    <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                                        <div className="flex gap-2">
+                                            {app.resumeUrl && (
+                                                <a
+                                                    href={app.resumeUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+                                                >
+                                                    <FileText size={16} />
+                                                    View Resume
+                                                </a>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleUpdateStatus(app.id, app.applicantId, 'Shortlisted')}
+                                                title="Shortlist"
+                                                className="px-4 py-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors font-bold text-sm flex items-center gap-2"
+                                            >
+                                                <CheckCircle2 size={18} />
+                                                Shortlist
+                                            </button>
+                                            <button
+                                                onClick={() => handleUpdateStatus(app.id, app.applicantId, 'Rejected')}
+                                                title="Reject"
+                                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-bold text-sm flex items-center gap-2"
+                                            >
+                                                <XCircle size={18} />
+                                                Reject
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </div>
             </div>

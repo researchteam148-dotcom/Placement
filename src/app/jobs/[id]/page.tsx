@@ -38,6 +38,17 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
     const [selectedResume, setSelectedResume] = useState<any>(null);
     const [submitting, setSubmitting] = useState(false);
 
+    // Student Profile Data (auto-populated, editable)
+    const [studentData, setStudentData] = useState({
+        name: '',
+        email: '',
+        branch: '',
+        cgpa: '',
+        backlogs: 0,
+        gradYear: '',
+        skills: [] as string[]
+    });
+
     useEffect(() => {
         const fetchJob = async () => {
             try {
@@ -75,16 +86,43 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
         checkApplication();
     }, [user, id]);
 
-    // Fetch Resumes when modal opens
+    // Fetch Resumes and Student Profile when modal opens
     useEffect(() => {
-        const fetchResumes = async () => {
+        const fetchData = async () => {
             if (showModal && user) {
+                // Fetch resumes
                 const q = query(collection(db, 'students', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
                 const snapshot = await getDocs(q);
                 setResumes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+                // Fetch student profile data
+                const studentDoc = await getDoc(doc(db, 'students', user.uid));
+                if (studentDoc.exists()) {
+                    const data = studentDoc.data();
+                    setStudentData({
+                        name: user.name || user.email || '',
+                        email: user.email || '',
+                        branch: data.branch || '',
+                        cgpa: data.cgpa || '',
+                        backlogs: data.backlogs || 0,
+                        gradYear: data.gradYear || '',
+                        skills: data.skills || []
+                    });
+                } else {
+                    // Fallback if no profile data
+                    setStudentData({
+                        name: user.name || user.email || '',
+                        email: user.email || '',
+                        branch: '',
+                        cgpa: '',
+                        backlogs: 0,
+                        gradYear: '',
+                        skills: []
+                    });
+                }
             }
         };
-        fetchResumes();
+        fetchData();
     }, [showModal, user]);
 
     const handleApplyClick = () => {
@@ -113,9 +151,18 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 company: job.company,
                 status: 'Pending',
                 appliedAt: new Date().toISOString(),
+
+                // Student Info (from profile, editable)
                 applicantId: user!.uid,
-                applicantName: user!.name || user!.email,
-                applicantEmail: user!.email,
+                applicantName: studentData.name,
+                applicantEmail: studentData.email,
+                branch: studentData.branch,
+                cgpa: studentData.cgpa,
+                backlogs: studentData.backlogs,
+                gradYear: studentData.gradYear,
+                skills: studentData.skills,
+
+                // Resume
                 logo: job.logo || null,
                 resumeUrl: selectedResume.url,
                 resumeName: selectedResume.name
@@ -217,7 +264,88 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
                                 </button>
                             </div>
 
-                            <div className="p-8 space-y-6">
+                            <div className="p-8 space-y-6 max-h-[60vh] overflow-y-auto">
+                                {/* Student Profile Section - Editable */}
+                                <div>
+                                    <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Your Details</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="col-span-2">
+                                            <label className="block text-xs font-bold text-slate-500 mb-2">Full Name</label>
+                                            <input
+                                                type="text"
+                                                value={studentData.name}
+                                                onChange={(e) => setStudentData({ ...studentData, name: e.target.value })}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium text-slate-900"
+                                                placeholder="Enter your name"
+                                            />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="block text-xs font-bold text-slate-500 mb-2">Email</label>
+                                            <input
+                                                type="email"
+                                                value={studentData.email}
+                                                onChange={(e) => setStudentData({ ...studentData, email: e.target.value })}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium text-slate-900"
+                                                placeholder="Enter your email"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-2">Branch</label>
+                                            <input
+                                                type="text"
+                                                value={studentData.branch}
+                                                onChange={(e) => setStudentData({ ...studentData, branch: e.target.value })}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium text-slate-900"
+                                                placeholder="e.g., Computer Science"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-2">CGPA</label>
+                                            <input
+                                                type="text"
+                                                value={studentData.cgpa}
+                                                onChange={(e) => setStudentData({ ...studentData, cgpa: e.target.value })}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium text-slate-900"
+                                                placeholder="e.g., 8.5"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-2">Backlogs</label>
+                                            <input
+                                                type="number"
+                                                value={studentData.backlogs}
+                                                onChange={(e) => setStudentData({ ...studentData, backlogs: parseInt(e.target.value) || 0 })}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium text-slate-900"
+                                                placeholder="0"
+                                                min="0"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-2">Graduation Year</label>
+                                            <input
+                                                type="text"
+                                                value={studentData.gradYear}
+                                                onChange={(e) => setStudentData({ ...studentData, gradYear: e.target.value })}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium text-slate-900"
+                                                placeholder="e.g., 2025"
+                                            />
+                                        </div>
+                                        {studentData.skills.length > 0 && (
+                                            <div className="col-span-2">
+                                                <label className="block text-xs font-bold text-slate-500 mb-2">Skills</label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {studentData.skills.map((skill, idx) => (
+                                                        <span key={idx} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold">
+                                                            {skill}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Resume Selection */}
                                 <div>
                                     <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Select Resume</h4>
 
@@ -239,8 +367,8 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
                                                     key={resume.id}
                                                     onClick={() => setSelectedResume(resume)}
                                                     className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-4 ${selectedResume?.id === resume.id
-                                                            ? 'border-indigo-600 bg-indigo-50'
-                                                            : 'border-slate-100 hover:border-indigo-200'
+                                                        ? 'border-indigo-600 bg-indigo-50'
+                                                        : 'border-slate-100 hover:border-indigo-200'
                                                         }`}
                                                 >
                                                     <div className={`p-2 rounded-xl ${selectedResume?.id === resume.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>

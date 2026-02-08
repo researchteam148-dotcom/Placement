@@ -65,7 +65,7 @@ const PostJobPage = () => {
         }
 
         // Basic validation
-        if (!jobData.title || !jobData.location || !jobData.description || (user.role === 'admin' && !selectedRecruiter) || (user.role === 'recruiter' && !jobData.company)) {
+        if (!jobData.title || !jobData.location || !jobData.description || (user.role === 'admin' && !selectedRecruiter)) {
             alert('Please fill in all required fields.');
             return;
         }
@@ -74,7 +74,10 @@ const PostJobPage = () => {
         try {
             await addDoc(collection(db, 'jobs'), {
                 ...jobData,
-                company: user.role === 'admin' ? selectedRecruiter?.name : jobData.company, // Auto-fill company if admin selects recruiter
+                // Use companyName from user profile for recruiters, or selected recruiter's companyName for admin
+                company: user.role === 'admin'
+                    ? (selectedRecruiter?.companyName || selectedRecruiter?.name)
+                    : (user.companyName || user.name),
                 perks,
                 postedBy: user.role === 'admin' ? selectedRecruiter?.id : user.uid,
                 postedByName: user.role === 'admin' ? selectedRecruiter?.name : user.name,
@@ -126,7 +129,7 @@ const PostJobPage = () => {
                                         const recruiter = recruiters.find(r => r.id === e.target.value);
                                         setSelectedRecruiter(recruiter);
                                         if (recruiter) {
-                                            setJobData(prev => ({ ...prev, company: recruiter.name || '' }));
+                                            setJobData(prev => ({ ...prev, company: recruiter.companyName || recruiter.name || '' }));
                                         }
                                     }}
                                 >
@@ -158,12 +161,17 @@ const PostJobPage = () => {
                                 <Building2 className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                 <input
                                     type="text"
-                                    value={jobData.company}
+                                    value={user?.role === 'recruiter' ? (user.companyName || user.name) : jobData.company}
                                     onChange={(e) => setJobData({ ...jobData, company: e.target.value })}
-                                    placeholder="e.g. Acme Corp"
-                                    className="w-full pl-12 pr-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
+                                    placeholder={user?.role === 'recruiter' ? (user.companyName || user.name) : "e.g. Acme Corp"}
+                                    disabled={user?.role === 'recruiter'}
+                                    className={`w-full pl-12 pr-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold ${user?.role === 'recruiter' ? 'cursor-not-allowed opacity-60' : ''
+                                        }`}
                                 />
                             </div>
+                            {user?.role === 'recruiter' && (
+                                <p className="text-xs text-slate-400 ml-1">Auto-filled from your profile</p>
+                            )}
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Job Type</label>

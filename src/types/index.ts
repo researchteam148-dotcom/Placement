@@ -1,6 +1,7 @@
 import { Timestamp, FieldValue } from 'firebase/firestore';
 
 export type UserRole = 'admin' | 'recruiter' | 'student';
+export type UserStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface User {
     uid: string;
@@ -9,6 +10,8 @@ export interface User {
     role: UserRole;
     createdAt: Timestamp | FieldValue | Date; // IMPROVED: Better type safety
     profileCompleted: boolean;
+    status?: UserStatus; // Optional for backward compatibility
+    companyName?: string; // For recruiters
 }
 
 export interface Student {

@@ -32,7 +32,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const createUserDocument = async (
     firebaseUser: FirebaseUser,
     role: UserRole,
-    displayName?: string
+    displayName?: string,
+    companyName?: string
 ): Promise<User> => {
     const newUser: Omit<User, 'createdAt'> & { createdAt: FieldValue } = {
         uid: firebaseUser.uid,
@@ -41,6 +42,10 @@ const createUserDocument = async (
         role: role,
         createdAt: serverTimestamp(),
         profileCompleted: false,
+        // Set status based on role - recruiters need approval
+        status: role === 'recruiter' ? 'Pending' : 'Approved',
+        // Add company name for recruiters
+        ...(role === 'recruiter' && companyName && { companyName }),
     };
 
     await setDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, firebaseUser.uid), newUser);
@@ -90,7 +95,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     const userDoc = await getDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, firebaseUser.uid));
 
                     if (userDoc.exists()) {
-                        setUser(userDoc.data() as User);
+                        const userData = userDoc.data() as User;
+                        // Set user data - status checks happen in signInWithEmail only
+                        setUser(userData);
                     } else {
                         // FIXED: New user logic with extracted function
                         const newUser = await createUserDocument(firebaseUser, 'student');
@@ -114,6 +121,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setError(null);
         try {
             await signInWithEmailAndPassword(auth, email, password);
+
+            // After successful auth, check user status for recruiters
+            const firebaseUser = auth.currentUser;
+            if (firebaseUser) {
+                const userDoc = await getDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, firebaseUser.uid));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data() as User;
+
+                    // Block pending/rejected recruiters from logging in
+                    if (userData.role === 'recruiter' && userData.status) {
+                        if (userData.status === 'Pending') {
+                            await signOut(auth);
+                            throw new Error('Your account is pending admin approval. Please wait for approval to access the dashboard.');
+                        } else if (userData.status === 'Rejected') {
+                            await signOut(auth);
+                            throw new Error('Your account has been rejected by admin. Please contact support for more information.');
+                        }
+                    }
+                }
+            }
         } catch (err) {
             const errorMsg = getErrorMessage(err);
             setError(errorMsg);
@@ -140,13 +167,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const signUpWithEmail = async (email: string, password: string, name: string, role: UserRole) => {
+    const signUpWithEmail = async (
+        email: string,
+        password: string,
+        name: string,
+        role: UserRole,
+        companyName?: string
+    ) => {
         setError(null);
         try {
             const result = await createUserWithEmailAndPassword(auth, email, password);
             const firebaseUser = result.user;
 
-            const newUser = await createUserDocument(firebaseUser, role, name);
+            const newUser = await createUserDocument(firebaseUser, role, name, companyName);
             setUser(newUser);
         } catch (err) {
             const errorMsg = getErrorMessage(err);

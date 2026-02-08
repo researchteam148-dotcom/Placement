@@ -22,7 +22,12 @@ const RegisterContent = () => {
 
     const [role, setRole] = useState(initialRole);
     const [step, setStep] = useState(1);
-    const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        password: '',
+        companyName: '' // For recruiters
+    });
     const [error, setError] = useState('');
     const { signUpWithEmail, signInWithGoogle, user, loading } = useAuth();
     const router = useRouter();
@@ -39,7 +44,13 @@ const RegisterContent = () => {
         e.preventDefault();
         setError('');
         try {
-            await signUpWithEmail(formData.email, formData.password, formData.name, role as any);
+            await signUpWithEmail(
+                formData.email,
+                formData.password,
+                formData.name,
+                role as any,
+                formData.companyName // Pass company name for recruiters
+            );
         } catch (err: any) {
             setError(err.message || 'Failed to create account');
         }
@@ -159,6 +170,24 @@ const RegisterContent = () => {
                                         />
                                     </div>
                                 </div>
+
+                                {role === 'recruiter' && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-1.5">Company Name</label>
+                                        <div className="relative">
+                                            <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                            <input
+                                                type="text"
+                                                required
+                                                value={formData.companyName}
+                                                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                                                placeholder="Acme Corporation"
+                                                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-1.5">Email</label>
                                     <div className="relative">
