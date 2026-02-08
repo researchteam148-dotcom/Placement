@@ -1,3 +1,5 @@
+import { Timestamp, FieldValue } from 'firebase/firestore';
+
 export type UserRole = 'admin' | 'recruiter' | 'student';
 
 export interface User {
@@ -5,18 +7,19 @@ export interface User {
     email: string;
     name: string;
     role: UserRole;
-    createdAt: any;
+    createdAt: Timestamp | FieldValue | Date; // IMPROVED: Better type safety
     profileCompleted: boolean;
 }
 
 export interface Student {
     uid: string;
-    cgpa: number;
-    branch: string;
-    skills: string[];
-    resumeURL: string;
-    batch: string;
-    graduationYear: number;
+    cgpa?: number;
+    branch?: string;
+    skills?: string[];
+    resumeURL?: string;
+    batch?: string;
+    gradYear?: string;
+    graduationYear?: number;
 }
 
 export interface Recruiter {
@@ -30,16 +33,22 @@ export interface Recruiter {
 export interface Job {
     id: string;
     title: string;
-    companyName: string;
-    type: 'on-campus' | 'off-campus';
-    eligibility: string;
+    company: string; // IMPROVED: Consistent naming (was companyName)
+    type: 'On-Campus' | 'Off-Campus';
+    employmentType?: 'Full-time' | 'Internship' | 'Remote';
+    eligibility?: string;
     postedBy: string; // Recruiter UID
-    applyLink: string;
+    applyLink?: string;
     description: string;
-    package: string;
-    deadline: any;
-    postedAt: any;
-    applicantsCount: number;
+    salary?: string; // IMPROVED: Consistent naming (was package)
+    deadline?: Timestamp | FieldValue | string;
+    postedAt: Timestamp | FieldValue | string;
+    applicants?: number; // IMPROVED: Consistent naming (was applicantsCount)
+    logo?: string;
+    location?: string;
+    responsibilities?: string[];
+    requirements?: string[];
+    perks?: string[];
 }
 
 export interface Application {
@@ -47,7 +56,8 @@ export interface Application {
     jobId: string;
     studentId: string;
     studentName: string;
-    status: 'pending' | 'shortlisted' | 'rejected' | 'accepted';
-    appliedAt: any;
-    resumeSnapshot: string;
+    status: 'Pending' | 'Shortlisted' | 'Rejected' | 'Accepted';
+    appliedAt: Timestamp | FieldValue | string;
+    resumeUrl?: string; // IMPROVED: Consistent naming (was resumeSnapshot)
+    resumeName?: string;
 }

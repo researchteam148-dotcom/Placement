@@ -73,9 +73,11 @@ const Navbar = () => {
                 {/* Logo & Search */}
                 <div className="flex items-center gap-3 flex-1 max-w-sm">
                     <Link href="/" className="flex-shrink-0 group">
-                        <div className="bg-indigo-600 p-2 rounded-xl text-white group-hover:scale-110 transition-transform shadow-lg shadow-indigo-200">
-                            <GraduationCap size={24} />
-                        </div>
+                        <img
+                            src="/aditya-logo.png"
+                            alt="Aditya Logo"
+                            className="h-12 w-auto object-contain group-hover:scale-105 transition-transform drop-shadow-sm"
+                        />
                     </Link>
                     <div className="hidden sm:flex flex-1 relative group">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />

@@ -120,6 +120,11 @@ interface ResumeData {
         link: string;
     }>;
     skills: string[];
+    customSections?: Array<{
+        id: string;
+        title: string;
+        content: string;
+    }>;
 }
 
 interface StandardTemplateProps {
@@ -217,6 +222,14 @@ const StandardTemplate: React.FC<StandardTemplateProps> = ({ data }) => {
                         </View>
                     </View>
                 )}
+
+                {/* Custom Sections */}
+                {data.customSections?.map((section) => (
+                    <View key={section.id} style={styles.section}>
+                        <Text style={styles.sectionTitle}>{section.title}</Text>
+                        <Text style={styles.text}>{section.content}</Text>
+                    </View>
+                ))}
             </Page>
         </Document>
     );

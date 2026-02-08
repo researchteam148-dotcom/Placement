@@ -131,6 +131,11 @@ interface ResumeData {
         link: string;
     }>;
     skills: string[];
+    customSections?: Array<{
+        id: string;
+        title: string;
+        content: string;
+    }>;
 }
 
 interface ModernTemplateProps {
@@ -230,6 +235,13 @@ const ModernTemplate: React.FC<ModernTemplateProps> = ({ data }) => {
                         </View>
                     )}
 
+                    {/* Custom Sections */}
+                    {data.customSections?.map((section) => (
+                        <View key={section.id}>
+                            <Text style={styles.sectionTitle}>{section.title}</Text>
+                            <Text style={styles.itemText}>{section.content}</Text>
+                        </View>
+                    ))}
                 </View>
 
             </Page>

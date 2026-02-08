@@ -39,7 +39,7 @@ const PostJobPage = () => {
     const [jobData, setJobData] = useState({
         title: '',
         company: '',
-        type: 'Full-time',
+        employmentType: 'Full-time', // Renamed from type to prevent collision
         salary: '',
         location: '',
         description: '',
@@ -79,7 +79,7 @@ const PostJobPage = () => {
                 postedBy: user.role === 'admin' ? selectedRecruiter?.id : user.uid,
                 postedByName: user.role === 'admin' ? selectedRecruiter?.name : user.name,
                 postedAt: new Date().toISOString(),
-                type: 'On-Campus',
+                type: 'On-Campus', // Keeps the main category as On-Campus
                 applicants: 0
             });
             alert('Job posted successfully! Students can now see this opening.');
@@ -87,7 +87,7 @@ const PostJobPage = () => {
             setJobData({
                 title: '',
                 company: '',
-                type: 'Full-time',
+                employmentType: 'Full-time',
                 salary: '',
                 location: '',
                 description: '',
@@ -168,8 +168,8 @@ const PostJobPage = () => {
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Job Type</label>
                             <select
-                                value={jobData.type}
-                                onChange={(e) => setJobData({ ...jobData, type: e.target.value })}
+                                value={jobData.employmentType}
+                                onChange={(e) => setJobData({ ...jobData, employmentType: e.target.value })}
                                 className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none font-semibold text-slate-700"
                             >
                                 <option>Full-time</option>

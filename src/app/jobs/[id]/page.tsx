@@ -14,13 +14,15 @@ import {
     Send,
     FileText,
     Clock,
-    AlertCircle
+    AlertCircle,
+    X,
+    Upload
 } from 'lucide-react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, collection, query, orderBy, getDocs } from 'firebase/firestore';
 
 const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
     const { id } = React.use(params);
@@ -29,6 +31,12 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [applied, setApplied] = useState(false);
+
+    // Application Modal State
+    const [showModal, setShowModal] = useState(false);
+    const [resumes, setResumes] = useState<any[]>([]);
+    const [selectedResume, setSelectedResume] = useState<any>(null);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         const fetchJob = async () => {
@@ -54,7 +62,32 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
         }
     }, [id]);
 
-    const handleApply = async () => {
+    // Check if already applied
+    useEffect(() => {
+        const checkApplication = async () => {
+            if (user && id) {
+                const appDoc = await getDoc(doc(db, 'users', user.uid, 'applications', id));
+                if (appDoc.exists()) {
+                    setApplied(true);
+                }
+            }
+        };
+        checkApplication();
+    }, [user, id]);
+
+    // Fetch Resumes when modal opens
+    useEffect(() => {
+        const fetchResumes = async () => {
+            if (showModal && user) {
+                const q = query(collection(db, 'students', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
+                const snapshot = await getDocs(q);
+                setResumes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }
+        };
+        fetchResumes();
+    }, [showModal, user]);
+
+    const handleApplyClick = () => {
         if (!user) {
             alert("Please login to apply");
             return;
@@ -63,8 +96,16 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
             alert("Only students can apply for jobs.");
             return;
         }
+        setShowModal(true);
+    };
 
-        setApplied(true); // Optimistic UI
+    const confirmApply = async () => {
+        if (!selectedResume) {
+            alert("Please select a resume to proceed.");
+            return;
+        }
+
+        setSubmitting(true);
         try {
             const applicationData = {
                 jobId: id,
@@ -72,17 +113,19 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 company: job.company,
                 status: 'Pending',
                 appliedAt: new Date().toISOString(),
-                applicantId: user.uid,
-                applicantName: user.name || user.email,
-                applicantEmail: user.email,
-                logo: job.logo || null
+                applicantId: user!.uid,
+                applicantName: user!.name || user!.email,
+                applicantEmail: user!.email,
+                logo: job.logo || null,
+                resumeUrl: selectedResume.url,
+                resumeName: selectedResume.name
             };
 
             // 1. Add to user's applications subcollection (for Student view)
-            await setDoc(doc(db, 'users', user.uid, 'applications', id), applicationData);
+            await setDoc(doc(db, 'users', user!.uid, 'applications', id), applicationData);
 
             // 2. Add to job's applications subcollection (for Recruiter/Admin view)
-            await setDoc(doc(db, 'jobs', id, 'applications', user.uid), applicationData);
+            await setDoc(doc(db, 'jobs', id, 'applications', user!.uid), applicationData);
 
             // 3. Increment applicant count on job document
             const jobRef = doc(db, 'jobs', id);
@@ -90,11 +133,14 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
                 applicants: increment(1)
             });
 
+            setApplied(true);
+            setShowModal(false);
             alert("Application submitted successfully!");
         } catch (error) {
             console.error("Error applying:", error);
-            setApplied(false); // Revert on error
             alert("Failed to apply. Please try again.");
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -142,6 +188,107 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
     return (
         <div className="min-h-screen bg-slate-50 pt-[72px]">
             <Navbar />
+
+            {/* Application Modal */}
+            <AnimatePresence>
+                {showModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="bg-white rounded-[32px] w-full max-w-lg overflow-hidden shadow-2xl"
+                        >
+                            <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-900">Apply to {job.company}</h3>
+                                    <p className="text-sm text-slate-500 font-bold">{job.title}</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowModal(false)}
+                                    className="p-2 bg-slate-50 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="p-8 space-y-6">
+                                <div>
+                                    <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Select Resume</h4>
+
+                                    {resumes.length === 0 ? (
+                                        <div className="text-center py-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                                            <FileText className="mx-auto text-slate-300 mb-2" size={32} />
+                                            <p className="text-slate-500 font-bold mb-4">No resumes found</p>
+                                            <Link
+                                                href="/profile"
+                                                className="inline-flex items-center gap-2 text-indigo-600 font-black text-sm hover:underline"
+                                            >
+                                                <Upload size={16} /> Upload in Profile
+                                            </Link>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                            {resumes.map((resume) => (
+                                                <div
+                                                    key={resume.id}
+                                                    onClick={() => setSelectedResume(resume)}
+                                                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-4 ${selectedResume?.id === resume.id
+                                                            ? 'border-indigo-600 bg-indigo-50'
+                                                            : 'border-slate-100 hover:border-indigo-200'
+                                                        }`}
+                                                >
+                                                    <div className={`p-2 rounded-xl ${selectedResume?.id === resume.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                                        <FileText size={20} />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <div className={`font-bold ${selectedResume?.id === resume.id ? 'text-indigo-900' : 'text-slate-900'}`}>
+                                                            {resume.name}
+                                                        </div>
+                                                        <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                                                            {new Date(resume.uploadedAt).toLocaleDateString()}
+                                                        </div>
+                                                    </div>
+                                                    {selectedResume?.id === resume.id && <div className="w-4 h-4 bg-indigo-600 rounded-full"></div>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="bg-slate-50 p-4 rounded-xl flex items-start gap-3">
+                                    <CheckCircle2 className="text-indigo-600 shrink-0 mt-0.5" size={18} />
+                                    <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                                        By applying, you agree to share your selected resume and profile details with <strong>{job.company}</strong>.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-4">
+                                <button
+                                    onClick={() => setShowModal(false)}
+                                    className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmApply}
+                                    disabled={!selectedResume || submitting}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                                >
+                                    {submitting ? 'Sending...' : 'Confirm Application'}
+                                    {!submitting && <Send size={18} />}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <div className="max-w-5xl mx-auto px-6 py-12">
                 <Link href="/jobs" className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 transition-colors font-medium mb-8 group">
@@ -259,8 +406,14 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
                                             href={job.applyLink || '#'}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            onClick={job.applyLink ? undefined : handleApply}
-                                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2"
+                                            onClick={(e) => {
+                                                if (!job.applyLink) {
+                                                    e.preventDefault();
+                                                    handleApplyClick();
+                                                }
+                                                // If applyLink exists, let it open in new tab (Off-campus behavior)
+                                            }}
+                                            className="w-full cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-200 flex items-center justify-center gap-2"
                                         >
                                             {job.applyLink ? 'Apply on Company Site' : 'Apply Now'} <Send size={20} />
                                         </a>

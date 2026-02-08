@@ -35,7 +35,8 @@ const AdminDashboard = () => {
                 const recruiterSnapshot = await getCountFromServer(qRecruiters);
 
                 const jobsColl = collection(db, 'jobs');
-                const jobSnapshot = await getCountFromServer(jobsColl);
+                const qJobs = query(jobsColl, where('type', '==', 'On-Campus'));
+                const jobSnapshot = await getCountFromServer(qJobs);
 
                 setStats({
                     students: studentSnapshot.data().count,

@@ -32,10 +32,13 @@ const ResumeHub = () => {
     const [uploading, setUploading] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
     const [resumeURL, setResumeURL] = useState('');
+    const [jobDescription, setJobDescription] = useState('');
     const [analysisResult, setAnalysisResult] = useState<any>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const [savedResumes, setSavedResumes] = useState<any[]>([]);
+    const [analysisHistory, setAnalysisHistory] = useState<any[]>([]);
+    const [selectedResumeId, setSelectedResumeId] = useState<string>('');
 
     useEffect(() => {
         const fetchStudentData = async () => {
@@ -43,8 +46,8 @@ const ResumeHub = () => {
                 const studentDoc = await getDoc(doc(db, 'students', user.uid));
                 if (studentDoc.exists()) {
                     const data = studentDoc.data();
-                    setResumeURL(data.resumeURL || '');
-                    setAnalysisResult(data.analysisResult || null);
+                    // We no longer auto-set resumeURL or analysisResult to ensure a fresh session on refresh
+                    // But we still fetch user data if needed for other UI parts
                 }
             }
         };
@@ -54,10 +57,21 @@ const ResumeHub = () => {
     // Fetch Saved Resumes Real-time
     useEffect(() => {
         if (!user) return;
-        const q = query(collection(db, 'students', user.uid, 'savedResumes'), orderBy('lastUpdated', 'desc'));
+        const q = query(collection(db, 'students', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const resumes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setSavedResumes(resumes);
+        });
+        return () => unsubscribe();
+    }, [user]);
+
+    // Fetch Analysis History Real-time
+    useEffect(() => {
+        if (!user) return;
+        const q = query(collection(db, 'students', user.uid, 'analysisHistory'), orderBy('analyzedAt', 'desc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const history = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setAnalysisHistory(history);
         });
         return () => unsubscribe();
     }, [user]);
@@ -77,55 +91,69 @@ const ResumeHub = () => {
         const file = e.target.files?.[0];
         if (!file || !user) return;
 
-        // Validation: Max size 700KB (Firestore limit is 1MB, safe margin)
-        if (file.size > 700 * 1024) {
-            alert('Free Tier Limit: File must be smaller than 700KB. Please compress your PDF or upgrade to use larger files.');
+        // Validation: Max size 5MB
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File must be smaller than 5MB.');
             if (fileInputRef.current) fileInputRef.current.value = '';
             return;
         }
 
         setUploading(true);
         try {
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                const base64String = event.target?.result as string;
 
-                try {
-                    // Store directly in Firestore
-                    // We use setDoc with merge: true to ensure the document exists
-                    // This creates the user profile if it doesn't exist yet.
+            // Create a storage reference from our storage service
+            const storageRef = ref(storage, `resumes/${user.uid}/${file.name}`);
 
+            // Upload file
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    // Track upload progress
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    // Progress tracking can be added to UI if needed
+                },
+                (error) => {
+                    // Handle unsuccessful uploads
+                    console.error("Firebase Storage Upload error:", error);
+                    alert(`Upload failed: ${error.message}`);
+                    setUploading(false);
+                },
+                async () => {
+                    // Handle successful uploads on complete
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+
+                    // Save URL to Firestore
                     await setDoc(doc(db, 'students', user.uid), {
-                        resumeURL: base64String, // Browser treats Data URLs just like HTTPS URLs
-                        resumeFileName: file.name
+                        resumeURL: downloadURL,
+                        resumeFileName: file.name,
+                        storageLocation: `resumes/${user.uid}/${file.name}` // Optional: track the storage path
                     }, { merge: true });
 
-                    setResumeURL(base64String);
-                    alert('Resume stored successfully (Free Tier)!');
-                } catch (err: any) {
-                    console.error("Firestore Save Error:", err);
-                    // Show the actual error message
-                    alert(`Failed to save: ${err.message}`);
-                } finally {
+                    setResumeURL(downloadURL);
+                    alert('Resume uploaded to Firebase Storage successfully!');
                     setUploading(false);
                     if (fileInputRef.current) fileInputRef.current.value = '';
                 }
-            };
-
-            reader.onerror = (error) => {
-                console.error("File Reading Error:", error);
-                alert("Failed to read file.");
-                setUploading(false);
-            };
-
-            reader.readAsDataURL(file);
+            );
 
         } catch (error: any) {
-            console.error("Unexpected error:", error);
-            alert(`An unexpected error occurred: ${error.message}`);
+            console.error("Comprehensive Upload error:", error);
+            alert(`Upload failed: ${error.message}`);
             setUploading(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
+    };
+
+    const selectResume = (resume: any) => {
+        setSelectedResumeId(resume.id);
+        setResumeURL(resume.url);
+    };
+
+    const viewHistoryItem = (historyItem: any) => {
+        setAnalysisResult(historyItem.analysisResult);
+        setResumeURL(historyItem.resumeUrl);
+        setJobDescription(historyItem.jobDescription || '');
     };
 
     const runAnalysis = async () => {
@@ -136,23 +164,46 @@ const ResumeHub = () => {
             const response = await fetch('/api/analyze-resume', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ resumeURL }) // Sending the Base64 string
+                body: JSON.stringify({ resumeURL, jobDescription })
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.details || errorData.error || 'Analysis failed');
+                let errorMessage = 'Analysis failed';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.details || errorData.error || errorMessage;
+                } catch (e) {
+                    try {
+                        const textError = await response.text();
+                        console.error("Non-JSON error response:", textError);
+                        errorMessage = `Server error (${response.status}): ${response.statusText}`;
+                    } catch (textErr) {
+                        errorMessage = `Network error (${response.status})`;
+                    }
+                }
+                throw new Error(errorMessage);
             }
 
             const result = await response.json();
 
-            // Save result to Firestore so we don't have to re-analyze every time
+            // Save result to current student document
             await updateDoc(doc(db, 'students', user.uid), {
                 analysisResult: result
             });
 
+            // IMPROVED: Save to analysis history
+            const selectedResume = savedResumes.find(r => r.url === resumeURL);
+            await setDoc(doc(collection(db, 'students', user.uid, 'analysisHistory')), {
+                resumeUrl: resumeURL,
+                resumeName: selectedResume?.name || 'Uploaded Resume',
+                analysisResult: result,
+                jobDescription: jobDescription || null,
+                analyzedAt: new Date().toISOString(),
+                score: result.score || 0
+            });
+
             setAnalysisResult(result);
-            alert('Resume analysis complete!');
+            alert('Resume analysis complete and saved to history!');
 
         } catch (error: any) {
             console.error("Analysis Error:", error);
@@ -253,106 +304,269 @@ const ResumeHub = () => {
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 rounded-full -translate-y-1/2 translate-x-1/2 -z-10 group-hover:scale-110 transition-transform duration-1000"></div>
                             </div>
 
-                            {/* Job Recommendations Section */}
-                            <div className="glass-card p-10 rounded-[40px] space-y-8">
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-4">
-                                        <div className="bg-emerald-500 p-3 rounded-2xl text-white shadow-lg shadow-emerald-100">
-                                            <Briefcase size={24} />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-2xl font-black text-slate-900 tracking-tight">AI Job Matcher</h3>
-                                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">Jobs aligned with your resume</p>
-                                        </div>
+                            {/* Resume Selector - NEW */}
+                            {savedResumes.length > 0 && (
+                                <div className="glass-card p-8 rounded-[40px] space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-xl font-black text-slate-900">Select from Your Resumes</h3>
+                                        <span className="text-sm text-slate-500 font-medium">{savedResumes.length} uploaded</span>
                                     </div>
-                                    <Link href="/jobs" className="text-sm font-black text-indigo-600 hover:underline underline-offset-4 uppercase tracking-widest">
-                                        Explore All
-                                    </Link>
-                                </div>
-
-                                <div className="grid gap-4">
-                                    {recommendations.map((job) => (
-                                        <div key={job.id} className="p-6 bg-slate-50/50 hover:bg-white rounded-[28px] border-2 border-transparent hover:border-indigo-100 transition-all group cursor-pointer shadow-sm hover:shadow-xl hover:shadow-indigo-100/20">
-                                            <div className="flex flex-wrap items-center justify-between gap-4">
-                                                <div className="flex items-center gap-5">
-                                                    <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center font-black text-indigo-600 text-xl border-2 border-slate-50 group-hover:border-indigo-50 shadow-sm transition-all">
-                                                        {job.company.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-black text-slate-900 text-lg">{job.title}</h4>
-                                                        <p className="text-slate-500 font-bold mb-1">{job.company}</p>
-                                                        <div className="flex gap-2">
-                                                            {job.tags.map(t => (
-                                                                <span key={t} className="px-2 py-0.5 bg-slate-100 text-[10px] font-black uppercase text-slate-500 rounded-md">
-                                                                    {t}
-                                                                </span>
-                                                            ))}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {savedResumes.map((resume) => (
+                                            <motion.div
+                                                key={resume.id}
+                                                whileHover={{ scale: 1.02 }}
+                                                onClick={() => selectResume(resume)}
+                                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${selectedResumeId === resume.id
+                                                        ? 'bg-indigo-50 border-indigo-600'
+                                                        : 'bg-white border-slate-100 hover:border-indigo-300'
+                                                    }`}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <FileText className={`shrink-0 ${selectedResumeId === resume.id ? 'text-indigo-600' : 'text-slate-400'}`} size={24} />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-bold text-slate-900 truncate">{resume.name}</div>
+                                                        <div className="text-xs text-slate-500 mt-1">
+                                                            {new Date(resume.uploadedAt).toLocaleDateString()} • {(resume.size / 1024).toFixed(0)} KB
                                                         </div>
                                                     </div>
+                                                    {selectedResumeId === resume.id && (
+                                                        <Check className="text-indigo-600 shrink-0" size={20} />
+                                                    )}
                                                 </div>
-                                                <div className="text-right">
-                                                    <div className="text-emerald-500 font-black text-2xl tracking-tighter">{job.match}</div>
-                                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Skill Match</div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Analysis History - NEW */}
+                            {analysisHistory.length > 0 && (
+                                <div className="glass-card p-8 rounded-[40px] space-y-6">
+                                    <div className="flex items-center gap-3">
+                                        <History className="text-indigo-600" size={24} />
+                                        <h3 className="text-xl font-black text-slate-900">Analysis History</h3>
+                                        <span className="text-sm text-slate-500 font-medium">({analysisHistory.length})</span>
+                                    </div>
+                                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                                        {analysisHistory.map((item) => (
+                                            <motion.div
+                                                key={item.id}
+                                                whileHover={{ scale: 1.01 }}
+                                                onClick={() => viewHistoryItem(item)}
+                                                className="p-4 bg-white rounded-2xl border border-slate-100 hover:border-indigo-300 cursor-pointer transition-all"
+                                            >
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-bold text-slate-900 truncate">{item.resumeName}</div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Clock size={12} className="text-slate-400" />
+                                                            <span className="text-xs text-slate-500">
+                                                                {new Date(item.analyzedAt).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        {item.jobDescription && (
+                                                            <div className="text-xs text-indigo-600 mt-1 truncate">
+                                                                For: {item.jobDescription.substring(0, 50)}...
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="shrink-0 text-center">
+                                                        <div className="text-2xl font-black text-indigo-600">{item.score}</div>
+                                                        <div className="text-[10px] text-slate-400 font-bold uppercase">Score</div>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Enhanced AI Audit Dashboard */}
+                            <AnimatePresence>
+                                {analysisResult && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="space-y-8"
+                                    >
+                                        {/* Row 1: Dashboard Overview (Full Width in Main Col) */}
+                                        <div className="glass-card p-10 rounded-[40px] flex flex-col md:flex-row items-center gap-10">
+                                            <div className="relative w-40 h-40 shrink-0">
+                                                <svg className="w-full h-full -rotate-90">
+                                                    <circle cx="80" cy="80" r="70" className="fill-none stroke-slate-100 stroke-[10]" />
+                                                    <motion.circle
+                                                        cx="80" cy="80" r="70"
+                                                        className="fill-none stroke-indigo-600 stroke-[12] stroke-round"
+                                                        initial={{ strokeDasharray: "0, 440" }}
+                                                        animate={{ strokeDasharray: `${(analysisResult.score / 100) * 440}, 440` }}
+                                                        transition={{ duration: 1.5, ease: "easeOut" }}
+                                                    />
+                                                </svg>
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                    <span className="text-4xl font-black text-slate-900">{analysisResult.score}</span>
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase">Overall</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex-1 space-y-6">
+                                                <h3 className="text-2xl font-black text-slate-900">Good Job! Your resume is looking strong.</h3>
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                                    {Object.entries(analysisResult.categories || {}).map(([key, cat]: [string, any], i: number) => (
+                                                        <div key={i} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 truncate">{cat.label || key}</div>
+                                                            <div className="flex justify-between items-end">
+                                                                <div className="text-lg font-black text-slate-900">{cat.score}%</div>
+                                                                <div className={`w-1.5 h-1.5 rounded-full ${cat.score > 80 ? 'bg-emerald-500' : cat.score > 50 ? 'bg-amber-500' : 'bg-red-500'}`} />
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
+
+                                        {/* Row 2: Top Fixes & Detailed Feedback */}
+                                        <div className="grid md:grid-cols-12 gap-8">
+                                            {/* Top Fixes (Left) */}
+                                            <div className="md:col-span-4 space-y-6 text-left">
+                                                <div className="glass-card p-8 rounded-[32px] border-l-4 border-l-indigo-600 h-full">
+                                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Top Fixes</h4>
+                                                    <div className="space-y-4">
+                                                        {analysisResult.topFixes?.length > 0 ? (
+                                                            analysisResult.topFixes.map((fix: any, i: number) => (
+                                                                <div key={i} className="flex justify-between items-center group cursor-help">
+                                                                    <span className="text-sm font-bold text-slate-700">{fix.category}</span>
+                                                                    <div className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${fix.status === 'critical' ? 'bg-red-50 text-red-500' :
+                                                                        fix.status === 'warning' ? 'bg-amber-50 text-amber-500' :
+                                                                            'bg-emerald-50 text-emerald-500'
+                                                                        }`}>
+                                                                        {fix.score}
+                                                                    </div>
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <p className="text-xs text-slate-400 font-medium italic">All major checks passed!</p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="mt-8 pt-6 border-t border-slate-100">
+                                                        <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-4">JD Match</h4>
+                                                        {analysisResult.jdMatch ? (
+                                                            <div className="space-y-3">
+                                                                <div className="text-3xl font-black text-slate-900">{analysisResult.jdMatch.score}%</div>
+                                                                <p className="text-xs text-slate-500 font-medium leading-relaxed">{analysisResult.jdMatch.summary}</p>
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-[10px] text-slate-400 font-medium italic">Compare with JD to see match.</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Detailed Strengths & Suggestions (Right) */}
+                                            <div className="md:col-span-8 space-y-6 text-left">
+                                                <div className="glass-card p-8 rounded-[32px] space-y-4 border border-emerald-100">
+                                                    <h4 className="text-xs font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                                                        <CheckCircle2 size={16} /> Key Strengths
+                                                    </h4>
+                                                    <ul className="space-y-3">
+                                                        {analysisResult.strengths?.map((s: string, i: number) => (
+                                                            <li key={i} className="text-sm font-medium text-slate-600 flex gap-3">
+                                                                <span className="text-emerald-500 shrink-0">•</span> <span>{s}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                                <div className="glass-card p-8 rounded-[32px] space-y-4 border border-indigo-100">
+                                                    <h4 className="text-xs font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                                                        <Sparkles size={16} /> Suggestions
+                                                    </h4>
+                                                    <ul className="space-y-3">
+                                                        {analysisResult.suggestions?.map((s: string, i: number) => (
+                                                            <li key={i} className="text-sm font-medium text-slate-600 flex gap-3">
+                                                                <span className="text-indigo-500 shrink-0">•</span> <span>{s}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
 
                         {/* Sidebar */}
                         <div className="lg:col-span-4 space-y-8">
-                            {/* AI Audit Sidecard */}
-                            <div className={`rounded-[40px] p-8 relative overflow-hidden group shadow-2xl transition-all ${analysisResult ? 'bg-gradient-to-br from-indigo-700 via-indigo-800 to-indigo-950 text-white shadow-indigo-200' : 'bg-white border-2 border-slate-100 shadow-slate-100'}`}>
+                            {/* Job Description Input (New) */}
+                            <div className="glass-card p-8 rounded-[40px] space-y-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-slate-900 p-2 rounded-xl text-white">
+                                        <Briefcase size={18} />
+                                    </div>
+                                    <h3 className="font-black text-lg uppercase tracking-widest text-slate-900">Target Role</h3>
+                                </div>
+                                <div className="space-y-4">
+                                    <p className="text-xs text-slate-500 font-medium leading-relaxed">Paste the job description you&apos;re applying for to get a specialized match score.</p>
+                                    <textarea
+                                        rows={5}
+                                        value={jobDescription}
+                                        onChange={(e) => setJobDescription(e.target.value)}
+                                        placeholder="Paste JD here..."
+                                        className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all text-sm font-medium"
+                                    />
+                                    <button
+                                        onClick={runAnalysis}
+                                        disabled={analyzing || !resumeURL}
+                                        className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all active:scale-95 disabled:opacity-50"
+                                    >
+                                        Compare Resume
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* AI Audit Sidecard (Updated) */}
+                            <div className={`rounded-[40px] p-8 relative overflow-hidden group shadow-2xl transition-all border-2 ${analysisResult ? 'bg-white border-indigo-100' : 'bg-slate-50 border-slate-100'}`}>
                                 <div className="relative z-10 space-y-8">
                                     <div className="flex justify-between items-center">
                                         <div className="flex items-center gap-3">
-                                            <Sparkles className={analysisResult ? "text-amber-400" : "text-indigo-600"} size={22} />
-                                            <h3 className="font-black text-lg uppercase tracking-widest">Resume Audit</h3>
+                                            <Sparkles className="text-indigo-600" size={22} />
+                                            <h3 className="font-black text-lg uppercase tracking-widest text-slate-900">Resume Audit</h3>
                                         </div>
-                                        {analysisResult && (
-                                            <div className="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full text-sm font-black border border-white/20">
-                                                {analysisResult.score}/100
-                                            </div>
-                                        )}
                                     </div>
 
-                                    {!analysisResult ? (
-                                        <div className="text-center space-y-6 py-6">
-                                            <p className="text-slate-500 font-medium">Get instant feedback on your resume using our advanced AI algorithms.</p>
+                                    {!analysisResult && (
+                                        <div className="text-center space-y-6 py-6 border-2 border-dashed border-slate-200 rounded-3xl p-6">
+                                            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                                                <Zap className="text-indigo-500" size={32} />
+                                            </div>
+                                            <p className="text-slate-500 font-medium text-sm">Upload a resume and start your professional audit.</p>
                                             <button
                                                 onClick={runAnalysis}
                                                 disabled={analyzing || !resumeURL}
-                                                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50"
+                                                className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-900 transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50"
                                             >
                                                 {analyzing ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} />}
                                                 {analyzing ? 'Analyzing...' : 'Start Review'}
                                             </button>
                                         </div>
-                                    ) : (
-                                        <div className="space-y-6">
-                                            <div className="space-y-3">
-                                                <div className="text-[10px] uppercase font-black text-indigo-300 tracking-[0.2em]">Key Improvements</div>
-                                                {analysisResult.suggestions.map((s: string, i: number) => (
-                                                    <div key={i} className="text-xs flex gap-3 items-start leading-relaxed font-bold bg-white/5 p-4 rounded-2xl border border-white/10 group-hover:bg-white/10 transition-colors">
-                                                        <div className="w-5 h-5 rounded-full bg-indigo-500/30 flex items-center justify-center shrink-0 border border-white/10">
-                                                            <Check size={10} />
-                                                        </div>
-                                                        {s}
-                                                    </div>
-                                                ))}
+                                    )}
+
+                                    {analysisResult && (
+                                        <div className="space-y-4 text-center">
+                                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-indigo-50 text-indigo-600 text-2xl font-black mb-2 border border-indigo-100">
+                                                {analysisResult.score}
                                             </div>
+                                            <p className="text-slate-500 text-sm font-medium">Your audit is complete. View the detailed report on the left.</p>
                                             <button
                                                 onClick={runAnalysis}
-                                                className="w-full bg-white text-indigo-700 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-all shadow-xl shadow-indigo-900/40 active:scale-95"
+                                                className="w-full bg-white border-2 border-slate-100 text-slate-900 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-indigo-600 transition-all active:scale-95"
                                             >
                                                 Rescan Document
                                             </button>
                                         </div>
                                     )}
                                 </div>
-                                <Sparkles className="absolute -bottom-6 -right-6 text-white/5 w-48 h-48 -rotate-12 group-hover:scale-125 transition-transform duration-1000" />
                             </div>
 
                             {/* Version History (Placeholder) */}

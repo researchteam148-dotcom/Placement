@@ -13,12 +13,16 @@ import {
     ChevronRight,
     TrendingUp,
     Building2,
-    Sparkles,
-    RefreshCw,
-    ChevronLeft
+    RefreshingCw,
+    ChevronLeft,
+    RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+
+// Global cache to persist data across navigations within the session
+const jobsCache: { [key: string]: { data: any[], timestamp: number } } = {};
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes fresh
 
 const JobsPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -27,35 +31,51 @@ const JobsPage = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
+    // Filters
+    const [selectedJobTypes, setSelectedJobTypes] = useState<string[]>([]);
+
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    // Fetch Jobs from Firestore (Cache-First logic)
+    // Fetch Jobs from Firestore
     useEffect(() => {
-        setLoading(true);
-        // Switch filter based on active tab
+        // 1. Check cache first for instant load
+        const cacheKey = activeTab;
+        if (jobsCache[cacheKey] && (Date.now() - jobsCache[cacheKey].timestamp < CACHE_DURATION)) {
+            setJobs(jobsCache[cacheKey].data);
+            setLoading(false);
+        } else {
+            setLoading(true); // Only show spinner if no cache or stale
+        }
+
+        // 2. Setup listener for updates (and to refresh cache)
         const typeFilter = activeTab === 'on-campus' ? 'On-Campus' : 'Off-Campus';
         const q = query(
             collection(db, 'jobs'),
             where('type', '==', typeFilter)
-            // orderBy('postedAt', 'desc') // Requires index, simpler to sort client-side for now or add index later
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // Client-side sort by postedAt (desc) if available, else standard order
-            // This avoids "index required" errors during dev
+
+            // Client-side sort
             jobsData.sort((a: any, b: any) => {
                 const dateA = new Date(a.postedAt || 0).getTime();
                 const dateB = new Date(b.postedAt || 0).getTime();
                 return dateB - dateA;
             });
 
+            // Update state and cache
             setJobs(jobsData);
+            jobsCache[cacheKey] = { data: jobsData, timestamp: Date.now() };
             setLoading(false);
-            // Reset to page 1 on tab change or new data
-            setCurrentPage(1);
+
+            // Reset page if we are on page 1, otherwise stick to current page unless out of bounds
+            if (currentPage === 1) setCurrentPage(1);
+        }, (error) => {
+            console.error("Error fetching jobs:", error);
+            setLoading(false);
         });
 
         return () => unsubscribe();
@@ -66,7 +86,6 @@ const JobsPage = () => {
         setRefreshing(true);
         try {
             await fetch('/api/jobs/scrape');
-            // No need to setJobs here, the onSnapshot listener above will auto-update!
         } catch (error) {
             console.error("Refresh failed:", error);
         } finally {
@@ -74,15 +93,51 @@ const JobsPage = () => {
         }
     };
 
+    const handleFilterChange = (type: string) => {
+        setSelectedJobTypes(prev => {
+            if (prev.includes(type)) {
+                return prev.filter(t => t !== type);
+            } else {
+                return [...prev, type];
+            }
+        });
+        setCurrentPage(1); // Reset to page 1 on filter change
+    };
+
+    // Filter Logic
+    const filteredJobs = jobs.filter(job => {
+        // 1. Search Term
+        const matchesSearch =
+            job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            job.company?.toLowerCase().includes(searchTerm.toLowerCase());
+
+        if (!matchesSearch) return false;
+
+        // 2. Employment Type Filter
+        if (selectedJobTypes.length > 0) {
+            // Check both old 'type' field (if it had values) and new 'employmentType' field
+            // The job.type is likely 'On-Campus'/'Off-Campus', but job.employmentType should be 'Full-time', etc.
+            // also checks if the type is in perks tags
+            const jobType = job.employmentType || job.type; // Fallback
+            const perks = job.perks || [];
+
+            const matchesType = selectedJobTypes.some(selected =>
+                jobType === selected || perks.includes(selected)
+            );
+
+            if (!matchesType) return false;
+        }
+
+        return true;
+    });
+
     // Pagination Logic
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentJobs = jobs.filter(job =>
-        job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        job.company?.toLowerCase().includes(searchTerm.toLowerCase())
-    ).slice(indexOfFirstItem, indexOfLastItem);
+    const currentJobs = filteredJobs.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(filteredJobs.length / itemsPerPage);
 
-    const totalPages = Math.ceil(jobs.length / itemsPerPage);
+    const filterOptions = ['Full-time', 'Internship', 'Remote']; // Removed 'Contract'
 
     return (
         <div className="min-h-screen mesh-gradient pt-16">
@@ -157,7 +212,7 @@ const JobsPage = () => {
 
             {/* Content */}
             <div className="max-w-7xl mx-auto px-4 lg:px-6 pb-20 grid lg:grid-cols-4 gap-12">
-                {/* Filters sidebar - Keep existing */}
+                {/* Filters sidebar */}
                 <aside className="hidden lg:block space-y-10 sticky top-32 h-fit">
                     <div className="glass-card p-8 rounded-[32px]">
                         <h3 className="text-xl font-black text-slate-900 flex items-center gap-3 mb-8">
@@ -168,12 +223,19 @@ const JobsPage = () => {
                             <div className="space-y-4">
                                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Employment Type</h4>
                                 <div className="space-y-3">
-                                    {['Full-time', 'Internship', 'Contract', 'Remote'].map((f) => (
+                                    {filterOptions.map((f) => (
                                         <label key={f} className="flex items-center gap-3 cursor-pointer group">
                                             <div className="relative flex items-center">
-                                                <input type="checkbox" className="peer w-5 h-5 rounded-lg border-2 border-slate-200 text-indigo-600 focus:ring-0 checked:border-indigo-600 transition-all cursor-pointer opacity-0 absolute inset-0 z-10" />
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedJobTypes.includes(f)}
+                                                    onChange={() => handleFilterChange(f)}
+                                                    className="peer w-5 h-5 rounded-lg border-2 border-slate-200 text-indigo-600 focus:ring-0 checked:border-indigo-600 transition-all cursor-pointer opacity-0 absolute inset-0 z-10"
+                                                />
                                                 <div className="w-5 h-5 border-2 border-slate-200 rounded-lg group-hover:border-indigo-400 peer-checked:bg-indigo-600 peer-checked:border-indigo-600 transition-all flex items-center justify-center">
-                                                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                                                    {selectedJobTypes.includes(f) && (
+                                                        <div className="w-2 h-2 bg-white rounded-full"></div>
+                                                    )}
                                                 </div>
                                             </div>
                                             <span className="text-slate-600 font-bold group-hover:text-slate-900 transition-colors">{f}</span>
@@ -188,7 +250,7 @@ const JobsPage = () => {
                 {/* Listings */}
                 <div className="lg:col-span-3 space-y-8">
                     <div className="flex justify-between items-center bg-white/50 backdrop-blur-sm p-4 rounded-2xl border border-white">
-                        <span className="text-slate-500 font-bold text-sm">Showing <span className="text-slate-900">{jobs.length}</span> jobs found</span>
+                        <span className="text-slate-500 font-bold text-sm">Showing <span className="text-slate-900">{filteredJobs.length}</span> jobs found</span>
                         <div className="flex items-center gap-2 text-slate-900 font-black text-sm cursor-pointer hover:text-indigo-600 transition-colors">
                             Sort by: Most Recent <ChevronRight size={18} />
                         </div>
@@ -204,7 +266,7 @@ const JobsPage = () => {
                                 <p className="text-slate-500">
                                     {activeTab === 'off-campus'
                                         ? 'Click the Refresh button to fetch latest jobs.'
-                                        : 'Check back later for new openings.'}
+                                        : 'Try adjusting filters or check back later.'}
                                 </p>
                             </div>
                         ) : (

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { collection, query, limit, getDocs } from 'firebase/firestore';
+import { collection, query, limit, getDocs, orderBy, where, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 const StudentDashboard = () => {
@@ -23,27 +23,147 @@ const StudentDashboard = () => {
     const [loadingJobs, setLoadingJobs] = useState(true);
 
     useEffect(() => {
-        const fetchRecentJobs = async () => {
+        const fetchSmartMatches = async () => {
+            if (!user) return;
             try {
-                const q = query(collection(db, 'jobs'), limit(3));
-                const snapshot = await getDocs(q);
-                setJobs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                // 1. Fetch student profile data (has skills array)
+                const studentDoc = await getDoc(doc(db, 'students', user.uid));
+                const studentData = studentDoc.exists() ? studentDoc.data() : null;
+
+                // 2. Extract keywords from skills
+                const stopWords = new Set(['and', 'the', 'for', 'with', 'using', 'from', 'base', 'developer', 'engineer', 'manager', 'intern', 'junior', 'senior']);
+                const keywords = new Set<string>();
+                const skillKeywords = new Set<string>();
+
+                if (studentData?.skills) {
+                    studentData.skills.forEach((s: string) => {
+                        const skill = s.toLowerCase().trim();
+                        if (skill) {
+                            keywords.add(skill);
+                            skillKeywords.add(skill);
+                            // Also add individual words from multi-word skills
+                            skill.split(/[\s\/\-,]+/).forEach((word: string) => {
+                                const cleanWord = word.replace(/[^a-z0-9]/g, '');
+                                if (cleanWord && cleanWord.length > 2 && !stopWords.has(cleanWord)) {
+                                    keywords.add(cleanWord);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                // Add branch as a keyword
+                if (studentData?.branch) {
+                    const branch = studentData.branch.toLowerCase();
+                    keywords.add(branch);
+                    branch.split(' ').forEach((word: string) => {
+                        if (word && !stopWords.has(word)) keywords.add(word);
+                    });
+                }
+
+                // 3. Fetch jobs
+                const jobsQuery = query(collection(db, 'jobs'), limit(20));
+                const jobsSnap = await getDocs(jobsQuery);
+                const allJobs = jobsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+
+                // 4. Score jobs and track matched skills
+                const scoredJobs = allJobs.map(job => {
+                    let score = 0;
+                    const matchedSkills: string[] = [];
+                    const jobTitle = job.title?.toLowerCase() || '';
+                    const jobDesc = job.description?.toLowerCase() || '';
+                    const jobCompany = job.company?.toLowerCase() || '';
+
+                    keywords.forEach(kw => {
+                        if (!kw || kw.length < 2) return;
+                        let found = false;
+
+                        // Higher weight for title matches
+                        if (jobTitle.includes(kw)) {
+                            score += 20;
+                            found = true;
+                        }
+
+                        // Medium weight for description matches
+                        if (jobDesc.includes(kw)) {
+                            score += 8;
+                            found = true;
+                        }
+
+                        // Track matched skills for display (limit to 3)
+                        if (found && skillKeywords.has(kw) && matchedSkills.length < 3) {
+                            const displaySkill = kw.toUpperCase();
+                            if (!matchedSkills.includes(displaySkill)) {
+                                matchedSkills.push(displaySkill);
+                            }
+                        }
+                    });
+
+                    // Normalize score to percentage (0-100)
+                    // If we have keywords, calculate a meaningful score
+                    let finalScore = 0;
+                    if (keywords.size > 0 && score > 0) {
+                        // Use logarithmic scaling for better distribution
+                        finalScore = Math.min(98, Math.floor(50 + Math.log(score + 1) * 10));
+                    }
+
+                    return { ...job, matchScore: finalScore, matchedSkills };
+                });
+
+                // 5. Sort by score and take top 3
+                const topJobs = scoredJobs
+                    .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
+                    .slice(0, 3);
+
+                setJobs(topJobs);
             } catch (error) {
-                console.error("Error fetching jobs:", error);
+                console.error("Error fetching matches:", error);
             } finally {
                 setLoadingJobs(false);
             }
         };
 
-        fetchRecentJobs();
-    }, []);
+        fetchSmartMatches();
+    }, [user]);
 
-    const stats = [
-        { label: 'Applied Jobs', value: '12', icon: <Briefcase className="text-indigo-600" />, color: 'bg-indigo-50' },
-        { label: 'Shortlisted', value: '3', icon: <CheckCircle2 className="text-emerald-600" />, color: 'bg-emerald-50' },
-        { label: 'Pending', value: '8', icon: <Clock className="text-amber-600" />, color: 'bg-amber-50' },
-        { label: 'Profile Score', value: '85%', icon: <TrendingUp className="text-indigo-600" />, color: 'bg-indigo-50' },
-    ];
+    const [stats, setStats] = useState([
+        { label: 'Applied Jobs', value: 0, icon: <Briefcase className="text-indigo-600" />, color: 'bg-indigo-50' },
+        { label: 'Shortlisted', value: 0, icon: <CheckCircle2 className="text-emerald-600" />, color: 'bg-emerald-50' },
+        { label: 'Pending', value: 0, icon: <Clock className="text-amber-600" />, color: 'bg-amber-50' },
+        { label: 'Profile Score', value: '0%', icon: <TrendingUp className="text-indigo-600" />, color: 'bg-indigo-50' },
+    ]);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            if (!user) return;
+            try {
+                // Fetch Applications
+                const appsQuery = query(collection(db, 'users', user.uid, 'applications'));
+                const appsSnap = await getDocs(appsQuery);
+                const appliedCount = appsSnap.size;
+                const shortlistedCount = appsSnap.docs.filter(doc => doc.data().status === 'Shortlisted').length;
+                const pendingCount = appsSnap.docs.filter(doc => doc.data().status === 'Pending').length;
+
+                // Fetch Profile Score
+                let profileScore = 0;
+                const studentDoc = await getDoc(doc(db, 'students', user.uid));
+                if (studentDoc.exists()) {
+                    profileScore = studentDoc.data().analysisResult?.score || 0;
+                }
+
+                setStats([
+                    { label: 'Applied Jobs', value: appliedCount, icon: <Briefcase className="text-indigo-600" />, color: 'bg-indigo-50' },
+                    { label: 'Shortlisted', value: shortlistedCount, icon: <CheckCircle2 className="text-emerald-600" />, color: 'bg-emerald-50' },
+                    { label: 'Pending', value: pendingCount, icon: <Clock className="text-amber-600" />, color: 'bg-amber-50' },
+                    { label: 'Profile Score', value: `${profileScore}%`, icon: <TrendingUp className="text-indigo-600" />, color: 'bg-indigo-50' },
+                ]);
+
+            } catch (error) {
+                console.error("Error fetching stats:", error);
+            }
+        };
+        fetchStats();
+    }, [user]);
 
     return (
         <div className="space-y-12 pb-10">
@@ -75,19 +195,22 @@ const StudentDashboard = () => {
 
             <div className="grid lg:grid-cols-3 gap-12">
                 <div className="lg:col-span-2 space-y-8">
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-end">
                         <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-                            <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-200">
-                                <Sparkles size={20} />
+                            <div className="bg-emerald-500 p-3 rounded-2xl text-white shadow-lg shadow-emerald-100">
+                                <Briefcase size={22} />
                             </div>
-                            Smart Matches
+                            <div className="flex flex-col">
+                                <span className="text-2xl font-black">AI Job Matcher</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Jobs Aligned With Your Resume</span>
+                            </div>
                         </h2>
-                        <Link href="/jobs" className="text-indigo-600 font-black text-sm hover:underline flex items-center gap-2 group">
-                            Explore All <ExternalLink size={16} className="group-hover:translate-x-1 transition-transform" />
+                        <Link href="/jobs" className="text-indigo-600 font-black text-[10px] uppercase tracking-widest hover:underline flex items-center gap-2 group mb-2">
+                            Explore All <ExternalLink size={14} className="group-hover:translate-x-1 transition-transform" />
                         </Link>
                     </div>
 
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         {loadingJobs ? (
                             <div className="flex justify-center p-8">
                                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-600"></div>
@@ -100,11 +223,11 @@ const StudentDashboard = () => {
                             jobs.map((job: any) => (
                                 <motion.div
                                     key={job.id}
-                                    whileHover={{ x: 10 }}
-                                    className="bg-white border-2 border-slate-50 p-6 rounded-[32px] flex flex-col md:flex-row justify-between items-center gap-6 hover:shadow-2xl hover:shadow-indigo-100/50 hover:border-indigo-100 transition-all group"
+                                    whileHover={{ y: -4, scale: 1.01 }}
+                                    className="bg-white border border-slate-100 p-6 rounded-[32px] flex justify-between items-center cursor-pointer transition-all hover:shadow-xl hover:shadow-indigo-50"
                                 >
-                                    <div className="flex flex-col md:flex-row gap-6 items-center w-full md:w-auto text-center md:text-left">
-                                        <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center border-2 border-slate-100 font-black text-indigo-600 text-2xl group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all duration-500 shadow-sm overflow-hidden p-2">
+                                    <div className="flex items-center gap-6">
+                                        <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center border-2 border-slate-50 font-black text-slate-900 text-2xl shadow-sm overflow-hidden">
                                             {job.logo ? (
                                                 <img src={job.logo} alt={job.company} className="w-full h-full object-contain" />
                                             ) : (
@@ -112,31 +235,26 @@ const StudentDashboard = () => {
                                             )}
                                         </div>
                                         <div>
-                                            <div className="flex flex-col md:flex-row items-center gap-3 mb-1">
-                                                <h3 className="font-black text-slate-900 text-xl tracking-tight">{job.title}</h3>
-                                                <span className="bg-indigo-50 text-indigo-600 text-[10px] font-black px-3 py-1 rounded-full border border-indigo-100 uppercase tracking-widest shadow-sm">
-                                                    {job.type || 'Full-time'}
-                                                </span>
-                                            </div>
-                                            <div className="flex flex-wrap justify-center md:justify-start gap-3 text-sm text-slate-500 font-bold mb-3">
-                                                <span>{job.company}</span>
-                                                <span className="hidden md:inline text-slate-300">•</span>
-                                                <div className="flex items-center gap-1 text-slate-900">
-                                                    <span className="text-indigo-600">₹</span> {job.salary || 'Not Disclosed'}
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-wrap justify-center md:justify-start gap-2">
-                                                {job.perks && job.perks.slice(0, 2).map((p: string, i: number) => (
-                                                    <span key={i} className="text-[10px] font-black bg-slate-50 text-slate-400 px-3 py-1 rounded-lg border border-slate-100 uppercase tracking-widest">
-                                                        {p}
+                                            <h3 className="font-black text-slate-900 text-lg leading-tight">{job.title}</h3>
+                                            <p className="text-sm font-bold text-slate-400 mb-2">{job.company}</p>
+                                            <div className="flex gap-2">
+                                                {job.matchedSkills?.map((skill: string, idx: number) => (
+                                                    <span key={idx} className="px-3 py-1 bg-slate-50 text-[9px] font-black text-slate-500 rounded-lg uppercase tracking-wider border border-slate-100">
+                                                        {skill}
                                                     </span>
                                                 ))}
+                                                {(!job.matchedSkills || job.matchedSkills.length === 0) && (
+                                                    <span className="px-3 py-1 bg-slate-50 text-[9px] font-black text-slate-400 rounded-lg uppercase tracking-wider border border-slate-100">
+                                                        Match based on experience
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
-                                    <Link href={`/jobs/${job.id}`} className="w-full md:w-auto bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-sm hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200 hover:shadow-indigo-200 active:scale-95 text-center">
-                                        View Details
-                                    </Link>
+                                    <div className="text-right flex flex-col items-end">
+                                        <div className="text-2xl font-black text-emerald-500">{job.matchScore}%</div>
+                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Skill Match</div>
+                                    </div>
                                 </motion.div>
                             )))}
                     </div>

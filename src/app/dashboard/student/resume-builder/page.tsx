@@ -5,53 +5,51 @@ import { useSearchParams } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import { useAuth } from '@/context/AuthContext';
 import {
-    GraduationCap,
     ChevronRight,
     ChevronLeft,
     Plus,
     Trash2,
-    Sparkles,
     Download,
     Save,
-    FileText,
     Layout,
-    CheckCircle2,
     Loader2
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { doc, updateDoc, collection, addDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import StandardTemplate from '@/components/resume-templates/StandardTemplate';
 import ModernTemplate from '@/components/resume-templates/ModernTemplate';
+import LivePreview from './LivePreview';
 
-const steps = ['Template', 'Basic Info', 'Education', 'Experience', 'Projects', 'Skills', 'Preview'];
+const INITIAL_RESUME_DATA = {
+    personal: { name: '', email: '', phone: '', linkedin: '', github: '' },
+    education: [{ school: '', degree: '', year: '', cgpa: '' }],
+    experience: [{ company: '', role: '', duration: '', description: '' }],
+    projects: [{ name: '', tech: '', description: '', link: '' }],
+    skills: [''],
+    customSections: [] as { id: string, title: string, content: string }[],
+};
 
 const AIResumeBuilder = () => {
     const { user } = useAuth();
-    const [currentStep, setCurrentStep] = useState(0);
+    const [phase, setPhase] = useState<'select' | 'build'>('select');
     const [selectedTemplate, setSelectedTemplate] = useState<'standard' | 'modern'>('standard');
     const [resumeData, setResumeData] = useState({
-        personal: { name: user?.name || '', email: user?.email || '', phone: '', linkedin: '', github: '' },
-        education: [{ school: '', degree: '', year: '', cgpa: '' }],
-        experience: [{ company: '', role: '', duration: '', description: '' }],
-        projects: [{ name: '', tech: '', description: '', link: '' }],
-        skills: [''],
+        ...INITIAL_RESUME_DATA,
+        personal: { ...INITIAL_RESUME_DATA.personal, name: user?.name || '', email: user?.email || '' }
     });
 
     const [optimizing, setOptimizing] = useState<number | null>(null);
-    const resumeRef = useRef<HTMLDivElement>(null);
-
-    const nextStep = () => setCurrentStep((s) => Math.min(s + 1, steps.length - 1));
-    const prevStep = () => setCurrentStep((s) => Math.max(s - 1, 0));
+    const [errors, setErrors] = useState<string[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
     const searchParams = useSearchParams();
     const resumeIdParam = searchParams.get('id');
     const [resumeId, setResumeId] = useState<string | null>(resumeIdParam);
-    const [isSaving, setIsSaving] = useState(false);
-    const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-    // Load existing resume if ID is present
+    // Load existing resume
     useEffect(() => {
         const loadResume = async () => {
             if (!user || !resumeIdParam) return;
@@ -59,8 +57,19 @@ const AIResumeBuilder = () => {
                 const docRef = doc(db, 'students', user.uid, 'savedResumes', resumeIdParam);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
-                    setResumeData(docSnap.data() as any);
-                    setSelectedTemplate(docSnap.data().template || 'standard');
+                    const data = docSnap.data();
+                    setResumeData({
+                        ...INITIAL_RESUME_DATA,
+                        ...data,
+                        personal: { ...INITIAL_RESUME_DATA.personal, ...(data.personal || {}) },
+                        education: data.education || INITIAL_RESUME_DATA.education,
+                        experience: data.experience || INITIAL_RESUME_DATA.experience,
+                        projects: data.projects || INITIAL_RESUME_DATA.projects,
+                        skills: data.skills || INITIAL_RESUME_DATA.skills,
+                        customSections: data.customSections || INITIAL_RESUME_DATA.customSections,
+                    });
+                    setSelectedTemplate(data.template || 'standard');
+                    setPhase('build');
                 }
             } catch (error) {
                 console.error("Error loading resume:", error);
@@ -69,19 +78,13 @@ const AIResumeBuilder = () => {
         loadResume();
     }, [user, resumeIdParam]);
 
-    // Auto-save logic
+    // Auto-save
     useEffect(() => {
-        if (!user) return;
-
+        if (!user || phase !== 'build') return;
         const saveData = async () => {
             setIsSaving(true);
             try {
-                const dataToSave = {
-                    ...resumeData,
-                    template: selectedTemplate,
-                    lastUpdated: new Date()
-                };
-
+                const dataToSave = { ...resumeData, template: selectedTemplate, lastUpdated: new Date() };
                 if (resumeId) {
                     await updateDoc(doc(db, 'students', user.uid, 'savedResumes', resumeId), dataToSave);
                 } else {
@@ -91,7 +94,6 @@ const AIResumeBuilder = () => {
                         name: resumeData.personal.name ? `${resumeData.personal.name}'s Resume` : 'Untitled Resume'
                     });
                     setResumeId(docRef.id);
-                    // Update URL without reload to reflect new ID
                     window.history.replaceState(null, '', `?id=${docRef.id}`);
                 }
                 setLastSaved(new Date());
@@ -101,65 +103,18 @@ const AIResumeBuilder = () => {
                 setIsSaving(false);
             }
         };
-
-        const timeout = setTimeout(saveData, 3000); // Auto-save after 3 seconds of inactivity
+        const timeout = setTimeout(saveData, 3000);
         return () => clearTimeout(timeout);
-    }, [resumeData, selectedTemplate, user, resumeId]);
-
-    const saveResume = async () => {
-        // Manual save is now just a visual confirmation or immediate trigger if needed, 
-        // but auto-save handles the core logic. 
-        // We can force a save here if needed.
-        if (!user) return;
-        setIsSaving(true);
-        try {
-            // Logic duplicated for immediate save feedback
-            const dataToSave = {
-                ...resumeData,
-                template: selectedTemplate,
-                lastUpdated: new Date()
-            };
-            if (resumeId) {
-                await updateDoc(doc(db, 'students', user.uid, 'savedResumes', resumeId), dataToSave);
-            } else {
-                const docRef = await addDoc(collection(db, 'students', user.uid, 'savedResumes'), {
-                    ...dataToSave,
-                    createdAt: new Date(),
-                    name: resumeData.personal.name ? `${resumeData.personal.name}'s Resume` : 'Untitled Resume'
-                });
-                setResumeId(docRef.id);
-                window.history.replaceState(null, '', `?id=${docRef.id}`);
-            }
-            setLastSaved(new Date());
-            alert('Saved successfully!');
-        } catch (error) {
-            console.error("Manual save error:", error);
-            alert("Failed to save.");
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleOptimize = async (type: 'experience' | 'projects', index: number) => {
-        const text = type === 'experience' ? resumeData.experience[index].description : resumeData.projects[index].description;
-        if (!text) return;
-
-        setOptimizing(index);
-        try {
-            const optimized = await optimizeWithAI(type, text) as string;
-            const newList = [...resumeData[type]] as any;
-            newList[index].description = optimized;
-            setResumeData({ ...resumeData, [type]: newList });
-        } finally {
-            setOptimizing(null);
-        }
-    };
+    }, [resumeData, selectedTemplate, user, resumeId, phase]);
 
     const handlePersonalInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setResumeData({
-            ...resumeData,
-            personal: { ...resumeData.personal, [e.target.name]: e.target.value }
-        });
+        setResumeData({ ...resumeData, personal: { ...resumeData.personal, [e.target.name]: e.target.value } });
+    };
+
+    const handleListItemChange = (field: 'education' | 'experience' | 'projects', index: number, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const newList = [...resumeData[field]] as any;
+        newList[index][e.target.name] = e.target.value;
+        setResumeData({ ...resumeData, [field]: newList });
     };
 
     const addListItem = (field: 'education' | 'experience' | 'projects') => {
@@ -175,406 +130,314 @@ const AIResumeBuilder = () => {
         setResumeData({ ...resumeData, [field]: newList });
     };
 
-    const handleListItemChange = (field: 'education' | 'experience' | 'projects', index: number, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const newList = [...resumeData[field]] as any;
-        newList[index][e.target.name] = e.target.value;
-        setResumeData({ ...resumeData, [field]: newList });
-    };
-
-    const optimizeWithAI = async (field: string, text: string) => {
-        // Simulated AI optimization
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve(`Optimized ${field}: Strong focus on ${text.length > 20 ? 'strategic' : 'technical'} execution and measurable outcomes.`);
-            }, 1000);
+    const addCustomSection = () => {
+        const id = Math.random().toString(36).substr(2, 9);
+        setResumeData({
+            ...resumeData,
+            customSections: [...resumeData.customSections, { id, title: 'New Section', content: '' }]
         });
     };
 
-    const renderStepContent = () => {
-        switch (currentStep) {
-            case 0:
-                return (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-                        <div className="text-center space-y-2">
-                            <h3 className="text-2xl font-black text-slate-900">Choose Your Template</h3>
-                            <p className="text-slate-500">Select a design that fits your professional style.</p>
-                        </div>
-                        <div className="grid md:grid-cols-2 gap-8">
-                            {/* Standard Template Card */}
-                            <div
-                                onClick={() => setSelectedTemplate('standard')}
-                                className={`cursor-pointer group p-4 rounded-3xl border-2 transition-all hover:scale-[1.02] ${selectedTemplate === 'standard' ? 'border-indigo-600 bg-indigo-50/50 ring-4 ring-indigo-100' : 'border-slate-100 bg-white hover:border-indigo-200'}`}
-                            >
-                                <div className="aspect-[1/1.4] bg-white rounded-xl shadow-lg border border-slate-100 mb-4 overflow-hidden relative">
-                                    <div className="absolute inset-0 bg-slate-100 p-3 space-y-2 opacity-50">
-                                        <div className="h-4 w-16 bg-slate-300 rounded mb-4 mx-auto"></div>
-                                        <div className="space-y-1">
-                                            <div className="h-2 w-full bg-slate-300 rounded"></div>
-                                            <div className="h-2 w-2/3 bg-slate-300 rounded"></div>
-                                        </div>
-                                    </div>
-                                    <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-white via-white to-transparent">
-                                        <div className="text-center font-black text-slate-900">Standard</div>
-                                        <div className="text-center text-xs text-slate-500">Classic styling for traditional industries.</div>
-                                    </div>
-                                </div>
-                                <div className="flex justify-center transition-opacity opacity-0 group-hover:opacity-100">
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedTemplate === 'standard' ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
-                                        {selectedTemplate === 'standard' && <CheckCircle2 size={14} className="text-white" />}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Modern Template Card */}
-                            <div
-                                onClick={() => setSelectedTemplate('modern')}
-                                className={`cursor-pointer group p-4 rounded-3xl border-2 transition-all hover:scale-[1.02] ${selectedTemplate === 'modern' ? 'border-indigo-600 bg-indigo-50/50 ring-4 ring-indigo-100' : 'border-slate-100 bg-white hover:border-indigo-200'}`}
-                            >
-                                <div className="aspect-[1/1.4] bg-white rounded-xl shadow-lg border border-slate-100 mb-4 overflow-hidden relative flex">
-                                    <div className="w-1/3 bg-slate-50 h-full border-r border-slate-200"></div>
-                                    <div className="w-2/3 h-full p-2">
-                                        <div className="h-2 w-full bg-slate-200 rounded mb-1"></div>
-                                        <div className="h-2 w-3/4 bg-slate-200 rounded"></div>
-                                    </div>
-                                    <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-white via-white to-transparent">
-                                        <div className="text-center font-black text-slate-900">Modern</div>
-                                        <div className="text-center text-xs text-slate-500">Two-column layout for tech & creative roles.</div>
-                                    </div>
-                                </div>
-                                <div className="flex justify-center transition-opacity opacity-0 group-hover:opacity-100">
-                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedTemplate === 'modern' ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300'}`}>
-                                        {selectedTemplate === 'modern' && <CheckCircle2 size={14} className="text-white" />}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                );
-            case 1:
-                return (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                        <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                            Contact Information
-                        </h3>
-                        <div className="grid grid-cols-2 gap-6">
-                            {['name', 'email', 'phone', 'linkedin', 'github'].map((field) => (
-                                <div key={field} className="space-y-1.5">
-                                    <label className="text-xs font-bold text-slate-400 capitalize">{field}</label>
-                                    <input
-                                        type="text"
-                                        name={field}
-                                        value={(resumeData.personal as any)[field]}
-                                        onChange={handlePersonalInfoChange}
-                                        className="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
-                );
-            case 2:
-                return (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-slate-900">Education</h3>
-                            <button onClick={() => addListItem('education')} className="text-indigo-600 font-bold text-sm flex items-center gap-1">
-                                <Plus size={16} /> Add More
-                            </button>
-                        </div>
-                        {resumeData.education.map((edu, i) => (
-                            <div key={i} className="p-6 bg-slate-50 rounded-2xl relative group">
-                                {i > 0 && (
-                                    <button onClick={() => removeListItem('education', i)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500">
-                                        <Trash2 size={18} />
-                                    </button>
-                                )}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input type="text" name="school" placeholder="University/School" value={edu.school} onChange={(e) => handleListItemChange('education', i, e)} className="p-3 bg-white rounded-lg border-transparent focus:border-indigo-500 outline-none w-full" />
-                                    <input type="text" name="degree" placeholder="Degree (e.g. B.Tech CSE)" value={edu.degree} onChange={(e) => handleListItemChange('education', i, e)} className="p-3 bg-white rounded-lg border-transparent focus:border-indigo-500 outline-none w-full" />
-                                    <input type="text" name="year" placeholder="Year" value={edu.year} onChange={(e) => handleListItemChange('education', i, e)} className="p-3 bg-white rounded-lg border-transparent focus:border-indigo-500 outline-none w-full" />
-                                    <input type="text" name="cgpa" placeholder="CGPA" value={edu.cgpa} onChange={(e) => handleListItemChange('education', i, e)} className="p-3 bg-white rounded-lg border-transparent focus:border-indigo-500 outline-none w-full" />
-                                </div>
-                            </div>
-                        ))}
-                    </motion.div>
-                );
-            case 3:
-                return (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-slate-900">Experience</h3>
-                            <button onClick={() => addListItem('experience')} className="text-indigo-600 font-bold text-sm flex items-center gap-1">
-                                <Plus size={16} /> Add More
-                            </button>
-                        </div>
-                        {resumeData.experience.map((exp, i) => (
-                            <div key={i} className="p-6 bg-slate-50 rounded-2xl relative group space-y-4">
-                                <button onClick={() => removeListItem('experience', i)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500">
-                                    <Trash2 size={18} />
-                                </button>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input type="text" name="company" placeholder="Company Name" value={exp.company} onChange={(e) => handleListItemChange('experience', i, e)} className="p-3 bg-white rounded-lg border-transparent focus:border-indigo-500 outline-none w-full" />
-                                    <input type="text" name="role" placeholder="Role (e.g. Web Dev Intern)" value={exp.role} onChange={(e) => handleListItemChange('experience', i, e)} className="p-3 bg-white rounded-lg border-transparent focus:border-indigo-500 outline-none w-full" />
-                                </div>
-                                <div className="space-y-2">
-                                    <textarea
-                                        name="description"
-                                        rows={3}
-                                        placeholder="Briefly describe your responsibilities..."
-                                        value={exp.description}
-                                        onChange={(e) => handleListItemChange('experience', i, e)}
-                                        className="w-full p-4 bg-white rounded-xl border-transparent focus:border-indigo-500 outline-none resize-none"
-                                    />
-                                    <button
-                                        onClick={() => handleOptimize('experience', i)}
-                                        disabled={optimizing === i}
-                                        className="text-indigo-600 text-xs font-bold flex items-center gap-1 hover:underline disabled:opacity-50"
-                                    >
-                                        {optimizing === i ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                                        {optimizing === i ? 'Optimizing...' : 'Optimize with AI'}
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </motion.div>
-                );
-            case 4:
-                return (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-slate-900">Projects</h3>
-                            <button onClick={() => addListItem('projects')} className="text-indigo-600 font-bold text-sm flex items-center gap-1">
-                                <Plus size={16} /> Add More
-                            </button>
-                        </div>
-                        {resumeData.projects.map((proj, i) => (
-                            <div key={i} className="p-6 bg-slate-50 rounded-2xl relative group space-y-4">
-                                <button onClick={() => removeListItem('projects', i)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500">
-                                    <Trash2 size={18} />
-                                </button>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <input type="text" name="name" placeholder="Project Name" value={proj.name} onChange={(e) => handleListItemChange('projects', i, e)} className="p-3 bg-white rounded-lg border-transparent focus:border-blue-500 outline-none w-full" />
-                                    <input type="text" name="tech" placeholder="Technologies (e.g. React, Firebase)" value={proj.tech} onChange={(e) => handleListItemChange('projects', i, e)} className="p-3 bg-white rounded-lg border-transparent focus:border-blue-500 outline-none w-full" />
-                                </div>
-                                <textarea
-                                    name="description"
-                                    rows={3}
-                                    placeholder="Describe your project..."
-                                    value={proj.description}
-                                    onChange={(e) => handleListItemChange('projects', i, e)}
-                                    className="w-full p-4 bg-white rounded-xl border-transparent focus:border-blue-500 outline-none resize-none"
-                                />
-                            </div>
-                        ))}
-                    </motion.div>
-                );
-            case 5:
-                return (
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
-                        <h3 className="text-xl font-bold text-slate-900">Skills</h3>
-                        <p className="text-sm text-slate-500">Enter skills separated by commas</p>
-                        <textarea
-                            rows={5}
-                            placeholder="e.g. JavaScript, React, Python, SQL..."
-                            value={resumeData.skills.join(', ')}
-                            onChange={(e) => setResumeData({ ...resumeData, skills: e.target.value.split(',').map(s => s.trim()) })}
-                            className="w-full p-6 bg-slate-50 rounded-[28px] border-transparent focus:border-blue-500 outline-none resize-none text-lg font-medium"
-                        />
-                    </motion.div>
-                );
-            case 6: // Final Preview Step
-                return (
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center space-y-4 py-8">
-                        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center shadow-lg shadow-emerald-50">
-                            <CheckCircle2 size={40} />
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-900 text-center">Your Resume is Ready!</h3>
-                        <p className="text-slate-500 text-center max-w-xs">Double check the preview to ensure everything looks professional.</p>
-
-                        <div className="mt-8">
-                            {/* Final Download Button */}
-                            <PDFDownloadLink
-                                document={selectedTemplate === 'standard' ? <StandardTemplate data={resumeData} /> : <ModernTemplate data={resumeData} />}
-                                fileName={`${resumeData.personal.name || 'Resume'}.pdf`}
-                                className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-lg shadow-2xl shadow-indigo-200 flex items-center gap-3 hover:bg-slate-900 transition-all"
-                            >
-                                {({ loading }) => (
-                                    <>
-                                        {loading ? <Loader2 className="animate-spin" size={24} /> : <Download size={24} />}
-                                        {loading ? 'Generating PDF...' : 'Download Resume'}
-                                    </>
-                                )}
-                            </PDFDownloadLink>
-                        </div>
-                    </motion.div>
-                );
-            default:
-                return null;
-        }
+    const handleCustomSectionChange = (id: string, field: 'title' | 'content', value: string) => {
+        const newSections = (resumeData.customSections || []).map(s =>
+            s.id === id ? { ...s, [field]: value } : s
+        );
+        setResumeData({ ...resumeData, customSections: newSections });
     };
 
-    return (
-        <div className="min-h-screen mesh-gradient pt-16 pb-20">
-            <Navbar />
-            <div className="">
-                <main className="max-w-7xl mx-auto p-4 lg:p-8">
-                    <div className="max-w-5xl mx-auto">
-                        <motion.div
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="flex flex-col md:flex-row justify-between items-center sm:items-start gap-6 mb-12"
-                        >
-                            <div className="text-center sm:text-left">
-                                <h1 className="text-4xl font-black text-slate-900 tracking-tight">AI Resume <span className="text-indigo-600">Architect</span></h1>
-                                <p className="text-lg text-slate-500 mt-2 font-medium">Design your professional future with AI-powered precision.</p>
-                            </div>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={saveResume}
-                                    className="bg-white border-2 border-slate-100 p-3 rounded-2xl text-slate-600 hover:text-indigo-600 hover:border-indigo-100 transition-all shadow-sm flex items-center gap-2"
-                                    title="Save Progress"
-                                >
-                                    <Save size={24} />
-                                    {isSaving ? <span className="text-xs font-bold text-slate-400">Saving...</span> : lastSaved && <span className="text-xs font-bold text-emerald-500">Saved</span>}
-                                </button>
-                                <PDFDownloadLink
-                                    document={selectedTemplate === 'standard' ? <StandardTemplate data={resumeData} /> : <ModernTemplate data={resumeData} />}
-                                    fileName={`${resumeData.personal.name || 'Resume'}.pdf`}
-                                    className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200"
-                                >
-                                    {({ loading }) => (
-                                        <>
-                                            <Download size={20} />
-                                            {loading ? 'Preparing...' : 'Export PDF'}
-                                        </>
-                                    )}
-                                </PDFDownloadLink>
-                            </div>
-                        </motion.div>
+    const removeCustomSection = (id: string) => {
+        setResumeData({
+            ...resumeData,
+            customSections: (resumeData.customSections || []).filter(s => s.id !== id)
+        });
+    };
 
-                        <div className="grid lg:grid-cols-4 gap-12">
-                            {/* Stepper */}
-                            <div className="lg:col-span-1 space-y-3">
-                                {steps.map((s, i) => (
-                                    <div
-                                        key={i}
-                                        className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${currentStep === i
-                                            ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-200 translate-x-2'
-                                            : 'text-slate-500 hover:bg-white hover:text-slate-900'
-                                            }`}
-                                    >
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${currentStep === i ? 'bg-white/20' : 'bg-slate-100'
-                                            }`}>
-                                            {i + 1}
+    if (phase === 'select') {
+        return (
+            <div className="min-h-screen mesh-gradient pt-20">
+                <Navbar />
+                <div className="max-w-4xl mx-auto p-8">
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-12">
+                        <h1 className="text-5xl font-black text-slate-900 mb-4">Select a <span className="text-indigo-600">Template</span></h1>
+                        <p className="text-xl text-slate-500">Choose the perfect design to showcase your story.</p>
+                    </motion.div>
+
+                    <div className="grid md:grid-cols-2 gap-12">
+                        {['standard', 'modern'].map((t) => (
+                            <motion.div
+                                key={t}
+                                whileHover={{ scale: 1.02 }}
+                                onClick={() => setSelectedTemplate(t as 'standard' | 'modern')}
+                                className={`cursor-pointer group relative p-6 rounded-[40px] border-4 transition-all ${selectedTemplate === t ? 'border-indigo-600 bg-white ring-8 ring-indigo-50' : 'border-white bg-white/50 hover:border-indigo-100 hover:bg-white'}`}
+                            >
+                                <div className="aspect-[1/1.4] bg-slate-50 rounded-3xl border border-slate-100 mb-6 overflow-hidden relative shadow-inner">
+                                    <div className="p-4 space-y-3 opacity-40">
+                                        <div className="h-4 w-1/2 bg-slate-300 rounded" />
+                                        <div className="h-2 w-full bg-slate-300 rounded" />
+                                        <div className="h-2 w-full bg-slate-300 rounded" />
+                                    </div>
+                                    <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent flex items-end justify-center pb-8">
+                                        <div className="bg-white/80 backdrop-blur px-6 py-2 rounded-full border border-slate-100 shadow-sm font-black uppercase text-indigo-600 tracking-widest text-sm">
+                                            {t} Layout
                                         </div>
-                                        <span className="font-black text-sm uppercase tracking-widest">{s}</span>
+                                    </div>
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="text-2xl font-black text-slate-900 capitalize mb-1">{t}</h3>
+                                    <p className="text-slate-500 font-medium">
+                                        {t === 'standard' ? 'Traditional LaTeX-style layout.' : 'Modern two-column tech layout.'}
+                                    </p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+
+                    <div className="flex justify-center mt-16">
+                        <button
+                            onClick={() => setPhase('build')}
+                            className="bg-slate-900 text-white px-12 py-5 rounded-[32px] font-black text-lg hover:bg-indigo-600 transition-all shadow-2xl flex items-center gap-3 hover:scale-105"
+                        >
+                            Architect My Resume <ChevronRight size={24} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="h-screen flex flex-col pt-16 overflow-hidden">
+            <Navbar />
+
+            {/* Minimal Header */}
+            <div className="bg-white border-b border-slate-100 px-8 py-3 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => setPhase('select')} className="p-2 hover:bg-slate-50 rounded-xl transition-colors text-slate-400 hover:text-indigo-600">
+                        <ChevronLeft size={24} />
+                    </button>
+                    <div>
+                        <h1 className="text-xl font-black text-slate-900 leading-tight">Architect Studio</h1>
+                        <p className="text-xs font-bold text-slate-400 flex items-center gap-1.5 uppercase tracking-widest">
+                            <Layout size={12} className="text-indigo-600" /> {selectedTemplate} Template
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <div className="text-right hidden sm:block">
+                        <p className="text-[10px] font-black uppercase text-slate-300 tracking-tighter">Status</p>
+                        <p className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                            {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                            {isSaving ? 'Saving...' : 'Synced'}
+                        </p>
+                    </div>
+                    <PDFDownloadLink
+                        document={selectedTemplate === 'standard' ? <StandardTemplate data={resumeData} /> : <ModernTemplate data={resumeData} />}
+                        fileName={`${resumeData.personal.name || 'Resume'}.pdf`}
+                        className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100"
+                    >
+                        {({ loading }) => (
+                            <>
+                                <Download size={18} />
+                                {loading ? 'Preparing...' : 'Export PDF'}
+                            </>
+                        )}
+                    </PDFDownloadLink>
+                </div>
+            </div>
+
+            {/* Split Layout Body */}
+            <div className="flex-1 flex overflow-hidden">
+                {/* Left: Input Form */}
+                <div className="w-full lg:w-1/2 overflow-y-auto p-8 lg:p-12 space-y-12 custom-scrollbar bg-[#fcfdfe]">
+                    {/* Sections */}
+                    <div className="space-y-10 max-w-2xl mx-auto">
+                        {/* Personal Info */}
+                        <section className="space-y-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">01</div>
+                                <h2 className="text-2xl font-black text-slate-900">Personal Details</h2>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {['name', 'email', 'phone', 'linkedin', 'github'].map((f) => (
+                                    <div key={f} className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-widest text-slate-400">{f}</label>
+                                        <input
+                                            type="text"
+                                            name={f}
+                                            value={(resumeData.personal as any)[f]}
+                                            onChange={handlePersonalInfoChange}
+                                            className="w-full bg-white px-4 py-3 rounded-xl border border-slate-100 focus:outline-none focus:ring-4 focus:ring-indigo-50 shadow-sm font-medium"
+                                            placeholder={`Your ${f}...`}
+                                        />
                                     </div>
                                 ))}
                             </div>
+                        </section>
 
-                            {/* Builder and Preview Area */}
-                            <div className="lg:col-span-3 space-y-12">
-                                <div className="grid xl:grid-cols-2 gap-12 items-start">
-                                    <motion.div
-                                        key={currentStep}
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        className="glass-card p-8 lg:p-10 rounded-[40px] min-h-[500px] flex flex-col"
-                                    >
-                                        <div className="flex-1">
-                                            {renderStepContent()}
-                                        </div>
-
-                                        <div className="mt-12 pt-8 border-t border-slate-100 flex justify-between gap-4">
-                                            <button
-                                                disabled={currentStep === 0}
-                                                onClick={prevStep}
-                                                className="flex items-center gap-2 px-6 py-3 text-slate-500 font-black text-sm hover:text-indigo-600 disabled:opacity-30 transition-colors"
-                                            >
-                                                <ChevronLeft size={20} /> Previous
-                                            </button>
-                                            {currentStep < 6 ? (
-                                                <button
-                                                    onClick={nextStep}
-                                                    className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black text-sm hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200 hover:shadow-indigo-200"
-                                                >
-                                                    Next Step
-                                                </button>
-                                            ) : (
-                                                <PDFDownloadLink
-                                                    document={selectedTemplate === 'standard' ? <StandardTemplate data={resumeData} /> : <ModernTemplate data={resumeData} />}
-                                                    fileName={`${resumeData.personal.name || 'Resume'}.pdf`}
-                                                    className="bg-emerald-600 text-white px-10 py-4 rounded-2xl font-black text-sm hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-200"
-                                                >
-                                                    {({ loading }) => loading ? 'Preparing...' : 'Finish & Download'}
-                                                </PDFDownloadLink>
-                                            )}
+                        {/* Education */}
+                        <section className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">02</div>
+                                    <h2 className="text-2xl font-black text-slate-900">Education</h2>
+                                </div>
+                                <button onClick={() => addListItem('education')} className="p-2 bg-white border border-slate-100 rounded-xl text-indigo-600 hover:bg-indigo-50 transition-colors shadow-sm">
+                                    <Plus size={20} />
+                                </button>
+                            </div>
+                            <div className="space-y-4">
+                                {resumeData.education.map((edu, i) => (
+                                    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} key={i} className="p-6 bg-white border border-slate-50 rounded-3xl shadow-sm relative group">
+                                        {i > 0 && <button onClick={() => removeListItem('education', i)} className="absolute -top-2 -right-2 p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 invisible group-hover:visible shadow-sm"><Trash2 size={14} /></button>}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input type="text" name="school" placeholder="University/School" value={edu.school} onChange={(e) => handleListItemChange('education', i, e)} className="p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white focus:border-indigo-100 outline-none w-full text-sm font-bold" />
+                                            <input type="text" name="degree" placeholder="Degree (B.Tech, MS)" value={edu.degree} onChange={(e) => handleListItemChange('education', i, e)} className="p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white focus:border-indigo-100 outline-none w-full text-sm font-bold" />
+                                            <input type="text" name="year" placeholder="Year (2020 - 2024)" value={edu.year} onChange={(e) => handleListItemChange('education', i, e)} className="p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white focus:border-indigo-100 outline-none w-full text-sm font-bold" />
+                                            <input type="text" name="cgpa" placeholder="CGPA/Grade" value={edu.cgpa} onChange={(e) => handleListItemChange('education', i, e)} className="p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white focus:border-indigo-100 outline-none w-full text-sm font-bold" />
                                         </div>
                                     </motion.div>
-
-                                    {/* Live Preview Column */}
-                                    <div className="hidden xl:block bg-slate-900 rounded-[40px] p-8 shadow-2xl relative overflow-hidden h-fit sticky top-24">
-                                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 to-transparent"></div>
-                                        <div className="relative z-10 w-full aspect-[1/1.414] bg-white rounded-xl shadow-2xl overflow-hidden origin-top scale-[0.85] transform-gpu">
-                                            <div ref={resumeRef} className="p-10 space-y-6 bg-white text-slate-900 h-full overflow-y-auto">
-                                                <div className="border-b-2 border-slate-900 pb-3">
-                                                    <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none mb-2">
-                                                        {resumeData.personal.name || 'Your Name'}
-                                                    </h1>
-                                                    <div className="flex flex-wrap gap-3 text-[10px] font-black uppercase text-slate-400">
-                                                        <span>{resumeData.personal.email}</span>
-                                                        <span>{resumeData.personal.phone}</span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-4">
-                                                    <h3 className="text-xs font-black uppercase text-indigo-600 border-b border-slate-100 pb-1 tracking-[0.2em]">Experience</h3>
-                                                    {resumeData.experience.map((exp, i) => (
-                                                        <div key={i} className="space-y-1">
-                                                            <div className="flex justify-between font-black text-[11px] uppercase tracking-tight">
-                                                                <span>{exp.company || 'Company Name'}</span>
-                                                                <span className="text-slate-400">{exp.duration}</span>
-                                                            </div>
-                                                            <div className="text-[10px] font-black text-slate-600 italic">{exp.role}</div>
-                                                            <div className="text-[9px] text-slate-500 leading-relaxed line-clamp-3">{exp.description}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <div className="space-y-4">
-                                                    <h3 className="text-xs font-black uppercase text-indigo-600 border-b border-slate-100 pb-1 tracking-[0.2em]">Projects</h3>
-                                                    {resumeData.projects.map((proj, i) => (
-                                                        <div key={i} className="space-y-1">
-                                                            <div className="flex justify-between font-black text-[11px] uppercase tracking-tight">
-                                                                <span>{proj.name || 'Project Name'}</span>
-                                                                <span className="text-slate-400 text-[9px]">{proj.tech}</span>
-                                                            </div>
-                                                            <div className="text-[9px] text-slate-500 leading-relaxed line-clamp-2">{proj.description}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <h3 className="text-xs font-black uppercase text-indigo-600 border-b border-slate-100 pb-1 tracking-[0.2em]">Expertise</h3>
-                                                    <div className="flex flex-wrap gap-1.5">
-                                                        {resumeData.skills.filter(s => s).map((skill, i) => (
-                                                            <span key={i} className="text-[8px] font-black uppercase tracking-widest bg-slate-50 px-2 py-1 rounded border border-slate-100 text-slate-500">
-                                                                {skill}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="relative z-20 mt-6 text-center text-white/40 font-black text-[10px] uppercase tracking-[0.3em]">
-                                            Live AI Preview
-                                        </div>
-                                    </div>
-                                </div>
+                                ))}
                             </div>
+                        </section>
+
+                        {/* Experience */}
+                        <section className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">03</div>
+                                    <h2 className="text-2xl font-black text-slate-900">Experience</h2>
+                                </div>
+                                <button onClick={() => addListItem('experience')} className="p-2 bg-white border border-slate-100 rounded-xl text-indigo-600 hover:bg-indigo-50 transition-colors shadow-sm">
+                                    <Plus size={20} />
+                                </button>
+                            </div>
+                            <div className="space-y-6">
+                                {resumeData.experience.map((exp, i) => (
+                                    <div key={i} className="p-6 bg-white border border-slate-50 rounded-3xl shadow-sm relative group space-y-4">
+                                        <button onClick={() => removeListItem('experience', i)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 invisible group-hover:visible"><Trash2 size={18} /></button>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input type="text" name="company" placeholder="Company Name" value={exp.company} onChange={(e) => handleListItemChange('experience', i, e)} className="p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white outline-none w-full text-sm font-black" />
+                                            <input type="text" name="duration" placeholder="Duration (June 23 - Present)" value={exp.duration} onChange={(e) => handleListItemChange('experience', i, e)} className="p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white outline-none w-full text-sm font-black" />
+                                        </div>
+                                        <input type="text" name="role" placeholder="Your Role (Web Dev Intern)" value={exp.role} onChange={(e) => handleListItemChange('experience', i, e)} className="w-full p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white outline-none text-sm font-bold" />
+                                        <textarea
+                                            name="description"
+                                            rows={3}
+                                            placeholder="Impactful description of your achievements..."
+                                            value={exp.description}
+                                            onChange={(e) => handleListItemChange('experience', i, e)}
+                                            className="w-full p-4 bg-slate-50 rounded-xl border-transparent focus:bg-white outline-none resize-none text-sm leading-relaxed"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* Projects */}
+                        <section className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">04</div>
+                                    <h2 className="text-2xl font-black text-slate-900">Projects</h2>
+                                </div>
+                                <button onClick={() => addListItem('projects')} className="p-2 bg-white border border-slate-100 rounded-xl text-indigo-600 hover:bg-indigo-50 transition-colors shadow-sm">
+                                    <Plus size={20} />
+                                </button>
+                            </div>
+                            <div className="space-y-6">
+                                {resumeData.projects.map((proj, i) => (
+                                    <div key={i} className="p-6 bg-white border border-slate-50 rounded-3xl shadow-sm relative group space-y-4">
+                                        <button onClick={() => removeListItem('projects', i)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 invisible group-hover:visible"><Trash2 size={18} /></button>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input type="text" name="name" placeholder="Project Title" value={proj.name} onChange={(e) => handleListItemChange('projects', i, e)} className="p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white outline-none w-full text-sm font-black" />
+                                            <input type="text" name="tech" placeholder="Tech Used (React, Node)" value={proj.tech} onChange={(e) => handleListItemChange('projects', i, e)} className="p-3 bg-slate-50 rounded-xl border-transparent focus:bg-white outline-none w-full text-sm font-black" />
+                                        </div>
+                                        <textarea
+                                            name="description"
+                                            rows={2}
+                                            placeholder="What did this project solve?"
+                                            value={proj.description}
+                                            onChange={(e) => handleListItemChange('projects', i, e)}
+                                            className="w-full p-4 bg-slate-50 rounded-xl border-transparent focus:bg-white outline-none resize-none text-sm leading-relaxed"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* Skills */}
+                        <section className="space-y-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">05</div>
+                                <h2 className="text-2xl font-black text-slate-900">Expertise</h2>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-slate-400 px-1 uppercase tracking-widest">Skill Tags (Comma separated)</label>
+                                <textarea
+                                    rows={4}
+                                    placeholder="JavaScript, React, Tailwind, Python, Machine Learning..."
+                                    value={resumeData.skills.join(', ')}
+                                    onChange={(e) => setResumeData({ ...resumeData, skills: e.target.value.split(',').map(s => s.trim()) })}
+                                    className="w-full p-6 bg-white rounded-3xl border border-slate-100 focus:outline-none focus:ring-4 focus:ring-indigo-50 shadow-sm font-bold text-slate-600"
+                                />
+                            </div>
+                        </section>
+
+                        {/* Custom Sections */}
+                        {(resumeData.customSections || []).map((section, i) => (
+                            <section key={section.id} className="space-y-6">
+                                <div className="flex justify-between items-center group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">{String(i + 6).padStart(2, '0')}</div>
+                                        <input
+                                            type="text"
+                                            value={section.title}
+                                            onChange={(e) => handleCustomSectionChange(section.id, 'title', e.target.value)}
+                                            className="text-2xl font-black text-slate-900 bg-transparent border-none focus:ring-0 w-fit cursor-edit p-0"
+                                            placeholder="Section Title..."
+                                        />
+                                    </div>
+                                    <button onClick={() => removeCustomSection(section.id)} className="p-2 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                                        <Trash2 size={20} />
+                                    </button>
+                                </div>
+                                <textarea
+                                    rows={4}
+                                    placeholder={`Details for ${section.title}...`}
+                                    value={section.content}
+                                    onChange={(e) => handleCustomSectionChange(section.id, 'content', e.target.value)}
+                                    className="w-full p-6 bg-white rounded-3xl border border-slate-100 focus:outline-none focus:ring-4 focus:ring-indigo-50 shadow-sm font-bold text-slate-600"
+                                />
+                            </section>
+                        ))}
+
+                        {/* Add Section Button */}
+                        <div className="pb-20">
+                            <button
+                                onClick={addCustomSection}
+                                className="w-full py-8 border-4 border-dashed border-slate-100 rounded-[40px] text-slate-400 font-black flex flex-col items-center justify-center gap-2 hover:border-indigo-100 hover:text-indigo-600 hover:bg-indigo-50/30 transition-all group"
+                            >
+                                <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+                                    <Plus size={24} />
+                                </div>
+                                <span>Add New Custom Section</span>
+                                <span className="text-[10px] uppercase tracking-widest opacity-60">Awards, Certifications, Languages...</span>
+                            </button>
                         </div>
                     </div>
-                </main>
+                </div>
+
+                {/* Right: Preview (Sticky/Fixed) */}
+                <div className="hidden lg:flex w-1/2 bg-[#0a0c10] items-center justify-center p-12 relative overflow-hidden">
+                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_50%_50%,#4f46e5_0%,transparent_50%)]" />
+                    <div className="relative w-full h-[85vh] max-w-[600px] group">
+                        <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200" />
+                        <div className="relative h-full bg-white rounded-2xl shadow-2xl overflow-hidden scale-[0.9] transform-gpu origin-top">
+                            <LivePreview data={resumeData} template={selectedTemplate} />
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
