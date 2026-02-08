@@ -12,6 +12,7 @@ const LoginPage = () => {
     const router = useRouter();
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     React.useEffect(() => {
         if (!loading && user) {
@@ -30,10 +31,13 @@ const LoginPage = () => {
     const handleEmailLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setIsSubmitting(true);
         try {
             await signInWithEmail(formData.email, formData.password);
+            // Success - redirect will happen via useEffect
         } catch (err: any) {
             setError(err.message || 'Failed to sign in');
+            setIsSubmitting(false);
         }
     };
 
@@ -132,16 +136,27 @@ const LoginPage = () => {
                                         className="w-full pl-11 pr-4 py-3.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                     />
                                 </div>
+                                {error && <p className="text-red-500 text-xs font-bold mt-2">{error}</p>}
                             </div>
                         </div>
 
-                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3.5 px-4 rounded-xl font-bold transition-all shadow-lg shadow-indigo-200 mt-6 flex items-center justify-center gap-2 group">
-                            Login Account
-                            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-200 mt-8 flex items-center justify-center gap-2"
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                                    Logging in...
+                                </>
+                            ) : (
+                                <>
+                                    Log In <ArrowRight size={20} />
+                                </>
+                            )}
                         </button>
                     </form>
-
-                    {error && <p className="text-red-500 text-sm mt-4 text-center">{error}</p>}
 
                     <p className="text-center text-slate-600 mt-8 text-sm">
                         Don't have an account? {' '}

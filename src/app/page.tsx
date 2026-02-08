@@ -33,8 +33,8 @@ const LandingPage = () => {
               <span>Transforming Campus Placements</span>
             </div>
             <h1 className="text-6xl lg:text-8xl font-black text-slate-900 leading-[1.05] mb-8 tracking-tight">
-              Elevate Your <br />
-              <span className="text-indigo-600">Future Career</span>
+              Elevate Your Future <br />
+              <span className="text-indigo-600">Career</span>
             </h1>
             <p className="text-xl text-slate-500 mb-12 max-w-lg leading-relaxed font-bold">
               The all-in-one AI ecosystem connecting students, recruiters, and placement nodes in a seamless digital experience.
@@ -59,45 +59,13 @@ const LandingPage = () => {
             initial={{ opacity: 0, scale: 0.8, rotate: -2 }}
             animate={{ opacity: 1, scale: 1, rotate: 0 }}
             transition={{ duration: 1, ease: "easeOut" }}
-            className="relative hidden lg:block"
+            className="relative mt-12 lg:mt-0"
           >
-            <div className="bg-gradient-to-tr from-indigo-700 to-indigo-800 rounded-[50px] p-1 shadow-[0_40px_100px_rgba(37,99,235,0.2)]">
-              <div className="bg-slate-950/90 backdrop-blur-2xl rounded-[48px] p-8 border border-white/10">
-                <div className="flex justify-between items-center mb-10">
-                  <div className="flex gap-2.5">
-                    <div className="w-4 h-4 rounded-full bg-rose-500 shadow-lg shadow-rose-500/50"></div>
-                    <div className="w-4 h-4 rounded-full bg-amber-500 shadow-lg shadow-amber-500/50"></div>
-                    <div className="w-4 h-4 rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/50"></div>
-                  </div>
-                  <div className="text-white/30 text-[10px] font-black uppercase tracking-[0.2em]">Live Dashboard Insight</div>
-                </div>
-                <div className="space-y-6">
-                  <div className="h-10 bg-white/5 rounded-2xl w-2/3 border border-white/5"></div>
-                  <div className="grid grid-cols-3 gap-6">
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="h-28 bg-white/[0.03] rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-indigo-500/20"></div>
-                        <div className="w-12 h-2 bg-white/10 rounded-full"></div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="h-44 bg-gradient-to-b from-white/5 to-transparent rounded-3xl border border-white/5 p-6">
-                    <div className="flex gap-4 items-center mb-6">
-                      <div className="w-12 h-12 rounded-2xl bg-white/10"></div>
-                      <div className="space-y-2">
-                        <div className="w-32 h-3 bg-white/20 rounded-full"></div>
-                        <div className="w-20 h-2 bg-white/10 rounded-full"></div>
-                      </div>
-                    </div>
-                    <div className="h-px bg-white/5 mb-6"></div>
-                    <div className="flex justify-between items-center">
-                      <div className="w-24 h-8 bg-indigo-600/20 rounded-xl border border-indigo-500/20"></div>
-                      <div className="w-16 h-8 bg-white/5 rounded-xl border border-white/10"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <img
+              src="/working.png"
+              alt="Platform Dashboard Preview"
+              className="w-full h-auto rounded-2xl lg:rounded-3xl shadow-2xl"
+            />
             {/* Decorative Blobs */}
             <div className="absolute -top-20 -right-20 w-80 h-80 bg-indigo-400/20 rounded-full blur-[100px] -z-10 animate-pulse"></div>
             <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-indigo-500/20 rounded-full blur-[100px] -z-10 animate-pulse delay-1000"></div>

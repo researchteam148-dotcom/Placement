@@ -29,6 +29,7 @@ const RegisterContent = () => {
         companyName: '' // For recruiters
     });
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const { signUpWithEmail, signInWithGoogle, user, loading } = useAuth();
     const router = useRouter();
 
@@ -43,6 +44,7 @@ const RegisterContent = () => {
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setIsSubmitting(true);
         try {
             await signUpWithEmail(
                 formData.email,
@@ -51,8 +53,10 @@ const RegisterContent = () => {
                 role as any,
                 formData.companyName // Pass company name for recruiters
             );
+            // Success - redirect will happen via useEffect
         } catch (err: any) {
             setError(err.message || 'Failed to create account');
+            setIsSubmitting(false);
         }
     };
 
@@ -219,8 +223,19 @@ const RegisterContent = () => {
 
                                 {error && <p className="text-red-500 text-xs font-bold mt-2">{error}</p>}
 
-                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-200 mt-8">
-                                    {loading ? "Creating..." : "Sign Up"}
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-200 mt-8 flex items-center justify-center gap-2"
+                                >
+                                    {isSubmitting ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
+                                            Creating Account...
+                                        </>
+                                    ) : (
+                                        "Sign Up"
+                                    )}
                                 </button>
                                 <p className="text-center mt-8 text-slate-500 font-medium">
                                     Already have an account? <Link href="/auth/login" className="text-indigo-600 font-bold hover:underline">Log in</Link>

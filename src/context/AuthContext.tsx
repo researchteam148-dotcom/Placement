@@ -21,7 +21,7 @@ interface AuthContextType {
     error: string | null;
     signInWithGoogle: (role?: UserRole) => Promise<void>;
     signInWithEmail: (email: string, password: string) => Promise<void>;
-    signUpWithEmail: (email: string, password: string, name: string, role: UserRole) => Promise<void>;
+    signUpWithEmail: (email: string, password: string, name: string, role: UserRole, companyName?: string) => Promise<void>;
     logout: () => Promise<void>;
     clearError: () => void;
 }
