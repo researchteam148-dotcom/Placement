@@ -61,11 +61,86 @@ const LandingPage = () => {
             transition={{ duration: 1, ease: "easeOut" }}
             className="relative mt-12 lg:mt-0"
           >
-            <img
-              src="/working.png"
-              alt="Platform Dashboard Preview"
-              className="w-full h-auto rounded-2xl lg:rounded-3xl shadow-2xl"
-            />
+            {/* CSS Dashboard Mockup */}
+            <div className="bg-white rounded-3xl shadow-2xl shadow-indigo-200/50 border border-slate-100 p-5 relative overflow-hidden">
+              {/* Window Controls */}
+              <div className="flex items-center gap-2 mb-5">
+                <div className="w-3 h-3 rounded-full bg-red-400"></div>
+                <div className="w-3 h-3 rounded-full bg-amber-400"></div>
+                <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
+                <div className="flex-1 bg-slate-100 rounded-lg h-6 ml-3 flex items-center px-3">
+                  <span className="text-[9px] text-slate-400 font-bold">placementhub.aditya.edu</span>
+                </div>
+              </div>
+
+              {/* Dashboard Content */}
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
+                  <div className="w-8 h-8 bg-indigo-600 rounded-xl mb-3 flex items-center justify-center">
+                    <Zap size={14} className="text-white" />
+                  </div>
+                  <div className="text-lg font-black text-slate-900">248</div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Active Jobs</div>
+                </div>
+                <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
+                  <div className="w-8 h-8 bg-emerald-600 rounded-xl mb-3 flex items-center justify-center">
+                    <CheckCircle2 size={14} className="text-white" />
+                  </div>
+                  <div className="text-lg font-black text-slate-900">5.2k</div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Placed</div>
+                </div>
+                <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
+                  <div className="w-8 h-8 bg-amber-500 rounded-xl mb-3 flex items-center justify-center">
+                    <Users size={14} className="text-white" />
+                  </div>
+                  <div className="text-lg font-black text-slate-900">200+</div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Partners</div>
+                </div>
+              </div>
+
+              {/* Job Cards Mockup */}
+              <div className="space-y-3">
+                {[
+                  { company: 'G', title: 'Software Engineer', salary: '₹18 LPA', color: 'bg-blue-600' },
+                  { company: 'M', title: 'Data Analyst', salary: '₹12 LPA', color: 'bg-emerald-600' },
+                  { company: 'A', title: 'Product Manager', salary: '₹22 LPA', color: 'bg-orange-500' },
+                ].map((job, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.8 + i * 0.2 }}
+                    className="flex items-center gap-3 bg-slate-50 rounded-2xl p-3 border border-slate-100"
+                  >
+                    <div className={`w-10 h-10 ${job.color} rounded-xl flex items-center justify-center text-white font-black text-sm`}>
+                      {job.company}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-black text-slate-900">{job.title}</div>
+                      <div className="text-[10px] text-slate-400 font-bold">Top Multinational • Remote</div>
+                    </div>
+                    <div className="text-xs font-black text-emerald-600">{job.salary}</div>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Match Score Bar */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+                className="mt-4 bg-indigo-600 rounded-2xl p-4 text-white flex items-center justify-between"
+              >
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-200">AI Match Score</div>
+                  <div className="text-lg font-black">92% Profile Match</div>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
+                  <LineChart size={20} />
+                </div>
+              </motion.div>
+            </div>
+
             {/* Decorative Blobs */}
             <div className="absolute -top-20 -right-20 w-80 h-80 bg-indigo-400/20 rounded-full blur-[100px] -z-10 animate-pulse"></div>
             <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-indigo-500/20 rounded-full blur-[100px] -z-10 animate-pulse delay-1000"></div>

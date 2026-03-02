@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GraduationCap, Mail, Lock, ArrowRight, Chrome, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 const LoginPage = () => {
     const { signInWithGoogle, signInWithEmail, user, loading } = useAuth();
@@ -17,13 +19,15 @@ const LoginPage = () => {
 
     React.useEffect(() => {
         if (!loading && user) {
-            router.push(`/dashboard/${user.role}`);
+            router.replace(`/dashboard/${user.role}`);
         }
     }, [user, loading, router]);
 
     const handleGoogleSignIn = async () => {
         try {
             await signInWithGoogle();
+            // Explicit redirect as fallback
+            setTimeout(() => router.replace('/dashboard/student'), 500);
         } catch (err: any) {
             setError(err.message || 'Failed to sign in');
         }
@@ -35,7 +39,13 @@ const LoginPage = () => {
         setIsSubmitting(true);
         try {
             await signInWithEmail(formData.email, formData.password);
-            // Success - redirect will happen via useEffect
+            // Explicit redirect after successful login
+            const currentUser = auth.currentUser;
+            if (currentUser) {
+                const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+                const role = userDoc.exists() ? userDoc.data()?.role : 'student';
+                router.replace(`/dashboard/${role}`);
+            }
         } catch (err: any) {
             setError(err.message || 'Failed to sign in');
             setIsSubmitting(false);

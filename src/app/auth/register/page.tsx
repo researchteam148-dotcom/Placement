@@ -17,6 +17,8 @@ import {
     EyeOff
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 const RegisterContent = () => {
     const searchParams = useSearchParams();
@@ -38,7 +40,7 @@ const RegisterContent = () => {
 
     React.useEffect(() => {
         if (!loading && user) {
-            router.push(`/dashboard/${user.role}`);
+            router.replace(`/dashboard/${user.role}`);
         }
     }, [user, loading, router]);
 
@@ -56,7 +58,8 @@ const RegisterContent = () => {
                 role as any,
                 formData.companyName // Pass company name for recruiters
             );
-            // Success - redirect will happen via useEffect
+            // Explicit redirect after successful signup
+            router.replace(`/dashboard/${role}`);
         } catch (err: any) {
             setError(err.message || 'Failed to create account');
             setIsSubmitting(false);
