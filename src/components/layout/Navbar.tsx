@@ -49,6 +49,7 @@ const Navbar = () => {
             { name: 'Home', href: '/dashboard/student', icon: <LayoutDashboard size={24} /> },
             { name: 'Jobs', href: '/jobs', icon: <Briefcase size={24} /> },
             { name: 'Applications', href: '/dashboard/student/applications', icon: <ClipboardList size={24} /> },
+            { name: 'Interviews', href: '/interviews', icon: <MessageSquare size={24} /> },
             { name: 'Resume', href: '/resume', icon: <FileText size={24} /> },
         ],
         recruiter: [

@@ -13,6 +13,7 @@ export const FIRESTORE_COLLECTIONS = {
     JOBS: 'jobs',
     APPLICATIONS: 'applications',
     SAVED_RESUMES: 'savedResumes',
+    INTERVIEW_EXPERIENCES: 'interviewExperiences',
 } as const;
 
 export const JOB_TYPES = {

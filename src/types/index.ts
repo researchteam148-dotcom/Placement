@@ -64,3 +64,21 @@ export interface Application {
     resumeUrl?: string; // IMPROVED: Consistent naming (was resumeSnapshot)
     resumeName?: string;
 }
+
+export type InterviewDifficulty = 'Easy' | 'Medium' | 'Hard';
+export type InterviewResult = 'Selected' | 'Rejected' | 'In Process';
+
+export interface InterviewExperience {
+    id: string;
+    userId: string;
+    userName: string;
+    company: string;
+    role: string;
+    difficulty: InterviewDifficulty;
+    result: InterviewResult;
+    experience: string;
+    preparationTips: string;
+    tags: string[];
+    createdAt: Timestamp | FieldValue | string;
+    updatedAt?: Timestamp | FieldValue | string;
+}
