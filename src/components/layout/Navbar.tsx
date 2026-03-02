@@ -207,51 +207,72 @@ const Navbar = () => {
                         className="fixed inset-0 top-14 z-40 bg-white lg:hidden overflow-y-auto"
                     >
                         <div className="p-6 space-y-6">
-                            <div className="relative group">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                <input
-                                    type="text"
-                                    placeholder="Search..."
-                                    className="w-full bg-slate-100 border-transparent border px-10 py-3 rounded-xl text-sm outline-none"
-                                />
-                            </div>
+                            {user ? (
+                                <>
+                                    <div className="relative group">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search..."
+                                            className="w-full bg-slate-100 border-transparent border px-10 py-3 rounded-xl text-sm outline-none"
+                                        />
+                                    </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                {currentNav.map((item) => (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {currentNav.map((item) => (
+                                            <Link
+                                                key={item.href}
+                                                href={item.href}
+                                                onClick={() => setIsMobileMenuOpen(false)}
+                                                className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 text-slate-600 hover:text-indigo-600 active:scale-95 transition-all"
+                                            >
+                                                {item.icon}
+                                                <span className="text-xs font-bold mt-2">{item.name}</span>
+                                            </Link>
+                                        ))}
+                                        <Link
+                                            href="/notifications"
+                                            onClick={() => setIsMobileMenuOpen(false)}
+                                            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 text-slate-600 hover:text-indigo-600 active:scale-95 transition-all"
+                                        >
+                                            <Bell size={24} />
+                                            <span className="text-xs font-bold mt-2">Notifications</span>
+                                        </Link>
+                                        <Link
+                                            href="/settings"
+                                            onClick={() => setIsMobileMenuOpen(false)}
+                                            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 text-slate-600 hover:text-indigo-600 active:scale-95 transition-all"
+                                        >
+                                            <Settings size={24} />
+                                            <span className="text-xs font-bold mt-2">Settings</span>
+                                        </Link>
+                                        <button
+                                            onClick={handleLogout}
+                                            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-red-50 text-red-600 active:scale-95 transition-all"
+                                        >
+                                            <LogOut size={24} />
+                                            <span className="text-xs font-bold mt-2">Sign Out</span>
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex flex-col gap-4 pt-4">
                                     <Link
-                                        key={item.href}
-                                        href={item.href}
+                                        href="/auth/login"
                                         onClick={() => setIsMobileMenuOpen(false)}
-                                        className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 text-slate-600 hover:text-indigo-600 active:scale-95 transition-all"
+                                        className="w-full text-center py-3.5 border-2 border-slate-200 text-slate-700 rounded-2xl font-bold hover:bg-slate-50 transition-all"
                                     >
-                                        {item.icon}
-                                        <span className="text-xs font-bold mt-2">{item.name}</span>
+                                        Log In
                                     </Link>
-                                ))}
-                                <Link
-                                    href="/notifications"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 text-slate-600 hover:text-indigo-600 active:scale-95 transition-all"
-                                >
-                                    <Bell size={24} />
-                                    <span className="text-xs font-bold mt-2">Notifications</span>
-                                </Link>
-                                <Link
-                                    href="/settings"
-                                    onClick={() => setIsMobileMenuOpen(false)}
-                                    className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 text-slate-600 hover:text-indigo-600 active:scale-95 transition-all"
-                                >
-                                    <Settings size={24} />
-                                    <span className="text-xs font-bold mt-2">Settings</span>
-                                </Link>
-                                <button
-                                    onClick={handleLogout}
-                                    className="flex flex-col items-center justify-center p-4 rounded-2xl bg-red-50 text-red-600 active:scale-95 transition-all"
-                                >
-                                    <LogOut size={24} />
-                                    <span className="text-xs font-bold mt-2">Sign Out</span>
-                                </button>
-                            </div>
+                                    <Link
+                                        href="/auth/register"
+                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        className="w-full text-center py-3.5 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
+                                    >
+                                        Get Started
+                                    </Link>
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 )}
