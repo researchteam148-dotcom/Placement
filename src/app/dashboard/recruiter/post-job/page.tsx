@@ -217,14 +217,14 @@ const PostJobPage = () => {
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Application Deadline</label>
-                            <div className="relative">
-                                <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <div className="relative group">
+                                <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
                                 <input
                                     type="text"
                                     value={jobData.deadline}
                                     onChange={(e) => setJobData({ ...jobData, deadline: e.target.value })}
                                     placeholder="e.g. 30th Nov, 2026"
-                                    className="w-full pl-12 pr-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
+                                    className="w-full pl-14 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
                                 />
                             </div>
                         </div>

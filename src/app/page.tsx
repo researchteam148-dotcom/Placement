@@ -159,29 +159,30 @@ const LandingPage = () => {
           {[
             {
               role: 'Students',
-              icon: <GraduationCap className="text-indigo-600" size={40} />,
+              icon: <GraduationCap size={40} />,
               features: ['AI Job Recommendations', 'Smart Resume Builder', 'Application Insights'],
               color: 'indigo'
             },
             {
               role: 'Recruiters',
-              icon: <Building2 className="text-indigo-600" size={40} />,
+              icon: <Building2 size={40} />,
               features: ['Bulk AI Shortlisting', 'Company Branding', 'Performance Analytics'],
               color: 'indigo'
             },
             {
               role: 'Admin',
-              icon: <ShieldCheck className="text-indigo-800" size={40} />,
+              icon: <ShieldCheck size={40} />,
               features: ['University Overview', 'Automated Workflows', 'Audit Logs'],
-              color: 'slate'
+              color: 'indigo'
             }
           ].map((item, i) => (
             <motion.div
               key={i}
-              whileHover={{ y: -15 }}
-              className="p-10 rounded-[40px] border-2 border-slate-50 bg-slate-50 hover:bg-white hover:shadow-[0_30px_70px_rgba(0,0,0,0.05)] hover:border-indigo-100 transition-all duration-500 group"
+              whileHover={{ scale: 1.02, y: -5 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="p-10 rounded-[40px] border-2 border-slate-50 bg-slate-50 hover:bg-white hover:shadow-[0_20px_40px_rgba(0,0,0,0.04)] hover:border-indigo-100/50 transition-all duration-300 group flex flex-col items-start text-left cursor-pointer"
             >
-              <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-slate-50 w-fit mb-10 group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
+              <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-slate-50 w-20 h-20 flex items-center justify-center mb-10 group-hover:bg-indigo-600 text-indigo-600 group-hover:text-white group-hover:shadow-lg group-hover:shadow-indigo-200 transition-all duration-300">
                 {item.icon}
               </div>
               <h3 className="text-2xl font-black text-slate-900 mb-8 tracking-tight">{item.role}</h3>

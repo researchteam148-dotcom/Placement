@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import {
     onAuthStateChanged,
     signInWithPopup,
@@ -86,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const authActionInProgress = useRef(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -94,15 +95,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     // Fetch user data from Firestore
                     const userDoc = await getDoc(doc(db, FIRESTORE_COLLECTIONS.USERS, firebaseUser.uid));
 
+                    console.log('[AuthContext] UID:', firebaseUser.uid, '| Doc exists:', userDoc.exists(), '| Role:', userDoc.exists() ? userDoc.data()?.role : 'N/A', '| AuthInProgress:', authActionInProgress.current);
+
                     if (userDoc.exists()) {
                         const userData = userDoc.data() as User;
-                        // Set user data - status checks happen in signInWithEmail only
                         setUser(userData);
-                    } else {
-                        // FIXED: New user logic with extracted function
+                    } else if (!authActionInProgress.current) {
+                        // Only auto-create document if NO auth action is in progress.
+                        // During signup, the signUpWithEmail handler creates the document
+                        // with the correct role. We must not race against it.
                         const newUser = await createUserDocument(firebaseUser, 'student');
                         setUser(newUser);
                     }
+                    // If authActionInProgress is true and doc doesn't exist,
+                    // skip — the signup handler will create it with the correct role.
                 } else {
                     setUser(null);
                 }
@@ -118,6 +124,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const signInWithEmail = async (email: string, password: string) => {
+        if (authActionInProgress.current) return;
+        authActionInProgress.current = true;
         setError(null);
         try {
             await signInWithEmailAndPassword(auth, email, password);
@@ -145,10 +153,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const errorMsg = getErrorMessage(err);
             setError(errorMsg);
             throw new Error(errorMsg);
+        } finally {
+            authActionInProgress.current = false;
         }
     };
 
     const signInWithGoogle = async (role: UserRole = 'student') => {
+        if (authActionInProgress.current) return;
+        authActionInProgress.current = true;
         setError(null);
         const provider = new GoogleAuthProvider();
         try {
@@ -160,10 +172,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const newUser = await createUserDocument(firebaseUser, role);
                 setUser(newUser);
             }
-        } catch (err) {
+        } catch (err: any) {
+            // Special handling for common popup errors that shouldn't crash the logic
+            if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-by-user') {
+                setError('Sign-in cancelled.');
+                return;
+            }
             const errorMsg = getErrorMessage(err);
             setError(errorMsg);
             throw new Error(errorMsg);
+        } finally {
+            authActionInProgress.current = false;
         }
     };
 
@@ -174,6 +193,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: UserRole,
         companyName?: string
     ) => {
+        if (authActionInProgress.current) return;
+        authActionInProgress.current = true;
         setError(null);
         try {
             const result = await createUserWithEmailAndPassword(auth, email, password);
@@ -185,10 +206,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const errorMsg = getErrorMessage(err);
             setError(errorMsg);
             throw new Error(errorMsg);
+        } finally {
+            authActionInProgress.current = false;
         }
     };
 
     const logout = async () => {
+        if (authActionInProgress.current) return;
+        authActionInProgress.current = true;
         setError(null);
         try {
             await signOut(auth);
@@ -197,6 +222,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const errorMsg = getErrorMessage(err);
             setError(errorMsg);
             throw new Error(errorMsg);
+        } finally {
+            authActionInProgress.current = false;
         }
     };
 

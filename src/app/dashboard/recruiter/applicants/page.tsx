@@ -5,6 +5,7 @@ import { Search, ExternalLink, CheckCircle2, XCircle, FileText } from 'lucide-re
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
+import { formatDate } from '@/lib/utils';
 
 const RecruiterApplicantsPage = () => {
     const { user } = useAuth();
@@ -136,7 +137,7 @@ const RecruiterApplicantsPage = () => {
                                             <div>
                                                 <h3 className="font-black text-slate-900 text-lg">{app.applicantName || 'Unknown User'}</h3>
                                                 <p className="text-sm text-slate-500 font-medium">{app.applicantEmail}</p>
-                                                <p className="text-xs text-slate-400 font-bold mt-1">Applied {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : 'N/A'}</p>
+                                                <p className="text-xs text-slate-400 font-bold mt-1">Applied {formatDate(app.appliedAt, 'N/A')}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">

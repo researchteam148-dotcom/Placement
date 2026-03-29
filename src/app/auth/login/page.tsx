@@ -26,8 +26,6 @@ const LoginPage = () => {
     const handleGoogleSignIn = async () => {
         try {
             await signInWithGoogle();
-            // Explicit redirect as fallback
-            setTimeout(() => router.replace('/dashboard/student'), 500);
         } catch (err: any) {
             setError(err.message || 'Failed to sign in');
         }
@@ -39,13 +37,6 @@ const LoginPage = () => {
         setIsSubmitting(true);
         try {
             await signInWithEmail(formData.email, formData.password);
-            // Explicit redirect after successful login
-            const currentUser = auth.currentUser;
-            if (currentUser) {
-                const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-                const role = userDoc.exists() ? userDoc.data()?.role : 'student';
-                router.replace(`/dashboard/${role}`);
-            }
         } catch (err: any) {
             setError(err.message || 'Failed to sign in');
             setIsSubmitting(false);

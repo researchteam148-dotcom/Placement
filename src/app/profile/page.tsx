@@ -313,18 +313,25 @@ const ProfilePage = () => {
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Academic Branch</label>
-                                            <select
-                                                name="branch"
-                                                value={formData.branch}
-                                                onChange={handleInputChange}
-                                                className="w-full bg-slate-50/50 px-6 py-4 rounded-[20px] border-2 border-slate-50 focus:border-indigo-600 focus:bg-white outline-none transition-all font-black appearance-none"
-                                            >
-                                                <option>Computer Science</option>
-                                                <option>Information Tech</option>
-                                                <option>Electronics</option>
-                                                <option>Mechanical</option>
-                                                <option>Civil</option>
-                                            </select>
+                                            <div className="relative group">
+                                                <select
+                                                    name="branch"
+                                                    value={formData.branch}
+                                                    onChange={handleInputChange}
+                                                    className="w-full bg-slate-50/50 px-6 py-4 rounded-[20px] border-2 border-slate-50 focus:border-indigo-600 focus:bg-white outline-none transition-all font-black appearance-none cursor-pointer"
+                                                >
+                                                    <option>Computer Science and Engineering</option>
+                                                    <option>Electronics and Communication Engineering</option>
+                                                    <option>Information Technology</option>
+                                                    <option>Electrical and Electronics Engineering</option>
+                                                    <option>Mechanical Engineering</option>
+                                                </select>
+                                                <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
+                                                    <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M1 1.5L6 6.5L11 1.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                                    </svg>
+                                                </div>
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Graduation Year</label>

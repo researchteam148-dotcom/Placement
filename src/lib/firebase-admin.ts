@@ -34,6 +34,6 @@ if (!admin.apps.length) {
 
 // Export with safe fallbacks
 export const adminAuth = admin.apps.length ? admin.auth() : null;
-export const adminDb = admin.apps.length ? admin.firestore() : null;
+export const adminDb = admin.apps.length ? admin.firestore('placement') : null;
 export const isAdminInitialized = admin.apps.length > 0;
 export default admin;

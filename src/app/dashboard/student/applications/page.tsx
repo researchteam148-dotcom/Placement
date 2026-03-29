@@ -5,6 +5,7 @@ import { FileText, Clock, CheckCircle2, XCircle, Search, Briefcase } from 'lucid
 import { collection, query, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
+import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
 
 const StudentApplicationsPage = () => {
@@ -35,19 +36,6 @@ const StudentApplicationsPage = () => {
         app.company?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Helper to format date
-    const formatDate = (dateString: string) => {
-        if (!dateString) return 'N/A';
-        try {
-            return new Date(dateString).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-            });
-        } catch (e) {
-            return dateString;
-        }
-    };
 
     return (
         <div className="space-y-8">

@@ -58,8 +58,7 @@ const RegisterContent = () => {
                 role as any,
                 formData.companyName // Pass company name for recruiters
             );
-            // Explicit redirect after successful signup
-            router.replace(`/dashboard/${role}`);
+            // Redirection is handled by the useEffect watching the 'user' state
         } catch (err: any) {
             setError(err.message || 'Failed to create account');
             setIsSubmitting(false);
