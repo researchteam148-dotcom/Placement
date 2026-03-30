@@ -12,6 +12,13 @@ export interface User {
     profileCompleted: boolean;
     status?: UserStatus; // Optional for backward compatibility
     companyName?: string; // For recruiters
+    // Student-specific fields (optional)
+    branch?: string;
+    regNo?: string;
+    cgpa?: number | string;
+    gradYear?: string;
+    skills?: string[];
+    backlogs?: number;
 }
 
 export interface Student {
