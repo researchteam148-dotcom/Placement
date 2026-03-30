@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         const { data, error } = await resend.emails.send({
             from: 'Placement Portal <notifications@promptify.fun>',
             to: [email],
-            reply_to: 'support@promptify.fun',
+            replyTo: 'support@promptify.fun',
             subject: subject,
             html: htmlContent,
             text: bodyMessage.replace(/<[^>]*>?/gm, ''), // Strip HTML tags for plaintext
