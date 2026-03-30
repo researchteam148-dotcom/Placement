@@ -8,46 +8,70 @@ service cloud.firestore {
     }
     
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) ? get(path).data : null;
     }
     
     function hasRole(role) {
-      return isSignedIn() && getUserData().role == role;
+      let data = getUserData();
+      return isSignedIn() && data != null && data.role == role;
     }
 
-    // User profiles
+    // =============================================
+    // USER PROFILES (Students, Recruiters, Admins)
+    // =============================================
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow write: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId || hasRole('admin');
+      
+      // User's own subcollections: savedResumes, analysisHistory
+      match /savedResumes/{resumeId} {
+        allow read: if isSignedIn();
+        allow write: if request.auth.uid == userId || hasRole('admin');
+      }
+      
+      match /analysisHistory/{historyId} {
+        allow read: if isSignedIn();
+        allow write: if request.auth.uid == userId || hasRole('admin');
+      }
+      
+      // Application records stored under student profiles
+      // Recruiters and Admins need write access to update status
+      match /applications/{appId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+
+      // Notifications stored under student profiles
+      match /notifications/{notificationId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
     }
 
-    // Students
-    match /students/{studentId} {
-      allow read: if isSignedIn();
-      allow write: if request.auth.uid == studentId || hasRole('admin');
-    }
-
-    // Recruiters
-    match /recruiters/{recruiterId} {
-      allow read: if isSignedIn();
-      allow write: if request.auth.uid == recruiterId || hasRole('admin');
-    }
-
-    // Jobs
+    // =============================================
+    // JOBS (On-Campus + Off-Campus)
+    // =============================================
     match /jobs/{jobId} {
-      allow read: if true; // Public listings
-      allow write: if hasRole('recruiter') || hasRole('admin');
+      allow read: if true;
+      allow write: if isSignedIn();
+      
+      // Applications submitted to this job
+      match /applications/{applicantId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
     }
 
-    // Applications
-    match /applications/{applicationId} {
-      allow read: if isSignedIn() && (
-        request.auth.uid == resource.data.studentId || 
-        hasRole('recruiter') || 
-        hasRole('admin')
+    // =============================================
+    // INTERVIEW EXPERIENCES
+    // =============================================
+    match /interviewExperiences/{experienceId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (
+        request.auth.uid == resource.data.userId || hasRole('admin')
       );
-      allow create: if hasRole('student');
-      allow update: if hasRole('recruiter') || hasRole('admin');
     }
   }
 }

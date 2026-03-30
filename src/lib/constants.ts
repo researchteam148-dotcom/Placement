@@ -8,8 +8,8 @@ export const USER_ROLES = {
 
 export const FIRESTORE_COLLECTIONS = {
     USERS: 'users',
-    STUDENTS: 'students',
-    RECRUITERS: 'recruiters',
+    STUDENTS: 'users',
+    RECRUITERS: 'users',
     JOBS: 'jobs',
     APPLICATIONS: 'applications',
     SAVED_RESUMES: 'savedResumes',

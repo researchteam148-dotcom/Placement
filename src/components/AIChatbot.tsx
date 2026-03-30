@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Bot, User, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -16,7 +17,9 @@ const suggestedQuestions = [
     'Common HR interview questions',
 ];
 
+
 const AIChatbot = () => {
+    const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
@@ -26,6 +29,9 @@ const AIChatbot = () => {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Only show chatbot for students
+    if (!user || user.role !== 'student') return null;
 
     const sendMessage = async (text?: string) => {
         const messageText = text || input.trim();
@@ -45,6 +51,16 @@ const AIChatbot = () => {
                         role: m.role,
                         content: m.content,
                     })),
+                    studentContext: user ? {
+                        name: user.name || '',
+                        email: user.email || '',
+                        branch: user.branch || '',
+                        regNo: user.regNo || '',
+                        cgpa: user.cgpa || '',
+                        gradYear: user.gradYear || '',
+                        skills: user.skills || [],
+                        backlogs: user.backlogs,
+                    } : null,
                 }),
             });
 
@@ -90,7 +106,7 @@ const AIChatbot = () => {
                             </div>
                             <div>
                                 <h3 className="text-white font-bold text-sm">AI Interview Assistant</h3>
-                                <p className="text-indigo-200 text-xs">Powered by Gemini</p>
+                                <p className="text-indigo-200 text-xs">Powered by DeepSeek</p>
                             </div>
                         </div>
 

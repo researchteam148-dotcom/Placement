@@ -68,19 +68,21 @@ export async function POST(request: NextRequest) {
             email,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error creating recruiter:', error);
 
         // Handle specific Firebase errors
-        if (error.code === 'auth/email-already-exists') {
+        const isFirebaseError = typeof error === 'object' && error !== null && 'code' in error;
+        if (isFirebaseError && (error as any).code === 'auth/email-already-exists') {
             return NextResponse.json(
                 { error: 'Email already exists in the system' },
                 { status: 409 }
             );
         }
 
+        const errorMessage = error instanceof Error ? error.message : 'Failed to create recruiter';
         return NextResponse.json(
-            { error: error.message || 'Failed to create recruiter' },
+            { error: errorMessage },
             { status: 500 }
         );
     }

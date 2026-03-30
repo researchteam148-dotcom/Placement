@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
         logger.debug('Initializing Gemini AI for resume analysis');
 
         // Prepare parts for analysis
-        let parts: any[] = [];
+        let parts: Array<{ inlineData: { data: string; mimeType: string } } | { text: string }> = [];
 
         if (resumeURL.startsWith('data:')) {
             // Case 1: Base64 Data URL (Legacy/Local)
@@ -71,8 +71,9 @@ export async function POST(request: NextRequest) {
                     { text: "Analyze this resume. Act as an expert hiring manager." }
                 ];
 
-            } catch (fetchError: any) {
-                logger.error('Error fetching from Firebase Storage:', fetchError.message);
+            } catch (fetchError: unknown) {
+                const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+                logger.error('Error fetching from Firebase Storage:', errorMessage);
                 return NextResponse.json({
                     error: 'Firebase Fetch Failed',
                     details: 'Failed to retrieve resume from Firebase Storage.'
@@ -140,8 +141,8 @@ export async function POST(request: NextRequest) {
                 result = await model.generateContent([prompt, ...parts]);
                 usedModel = modelName;
                 break;
-            } catch (e: any) {
-                const msg = e.message || "Unknown Error";
+            } catch (e: unknown) {
+                const msg = e instanceof Error ? e.message : "Unknown Error";
                 logger.warn(`Failed with ${modelName}: ${msg}`);
 
                 // Categorize error for debug report
@@ -173,11 +174,12 @@ export async function POST(request: NextRequest) {
         // Return analysis directly
         return NextResponse.json(analysis);
 
-    } catch (error: any) {
-        logger.error('Resume analysis error:', error.message);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+        logger.error('Resume analysis error:', errorMessage);
         return NextResponse.json({
             error: 'Analysis Failed',
-            details: error.message || 'An unexpected error occurred.'
+            details: errorMessage
         }, { status: 500 });
     }
 }

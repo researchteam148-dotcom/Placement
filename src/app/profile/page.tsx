@@ -41,7 +41,7 @@ const ProfilePage = () => {
     useEffect(() => {
         const fetchStudentData = async () => {
             if (user) {
-                const studentDoc = await getDoc(doc(db, 'students', user.uid));
+                const studentDoc = await getDoc(doc(db, 'users', user.uid));
                 if (studentDoc.exists()) {
                     const data = studentDoc.data();
                     setSkills(data.skills || []);
@@ -60,9 +60,11 @@ const ProfilePage = () => {
     // Fetch Resumes Real-time
     useEffect(() => {
         if (!user) return;
-        const q = query(collection(db, 'students', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
+        const q = query(collection(db, 'users', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             setResumes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (error) => {
+            console.error("Error fetching resumes:", error);
         });
         return () => unsubscribe();
     }, [user]);
@@ -83,7 +85,7 @@ const ProfilePage = () => {
         if (!user) return;
         setSaving(true);
         try {
-            await setDoc(doc(db, 'students', user.uid), {
+            await setDoc(doc(db, 'users', user.uid), {
                 ...formData,
                 skills: skills,
                 uid: user.uid,
@@ -117,7 +119,7 @@ const ProfilePage = () => {
             const downloadURL = await getDownloadURL(storageRef);
 
             // 2. Save metadata to Firestore
-            await addDoc(collection(db, 'students', user.uid, 'savedResumes'), {
+            await addDoc(collection(db, 'users', user.uid, 'savedResumes'), {
                 name: fileToUpload.name,
                 url: downloadURL,
                 uploadedAt: new Date().toISOString(),
@@ -138,7 +140,7 @@ const ProfilePage = () => {
         if (!confirm("Are you sure you want to delete this resume?")) return;
         try {
             // 1. Delete from Firestore
-            await deleteDoc(doc(db, 'students', user!.uid, 'savedResumes', resume.id));
+            await deleteDoc(doc(db, 'users', user!.uid, 'savedResumes', resume.id));
 
             // 2. Try to delete from Storage (might fail if we don't parse path correctly, but firestore is key)
             // Extract path from URL or just rely on Firestore deletion for UI

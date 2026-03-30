@@ -91,12 +91,12 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
         const fetchData = async () => {
             if (showModal && user) {
                 // Fetch resumes
-                const q = query(collection(db, 'students', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
+                const q = query(collection(db, 'users', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
                 const snapshot = await getDocs(q);
                 setResumes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
                 // Fetch student profile data
-                const studentDoc = await getDoc(doc(db, 'students', user.uid));
+                const studentDoc = await getDoc(doc(db, 'users', user.uid));
                 if (studentDoc.exists()) {
                     const data = studentDoc.data();
                     setStudentData({
@@ -174,11 +174,15 @@ const JobDetailsPage = ({ params }: { params: Promise<{ id: string }> }) => {
             // 2. Add to job's applications subcollection (for Recruiter/Admin view)
             await setDoc(doc(db, 'jobs', id, 'applications', user!.uid), applicationData);
 
-            // 3. Increment applicant count on job document
-            const jobRef = doc(db, 'jobs', id);
-            await updateDoc(jobRef, {
-                applicants: increment(1)
-            });
+            // 3. Try to increment applicant count (non-critical — don't fail the whole application)
+            try {
+                const jobRef = doc(db, 'jobs', id);
+                await updateDoc(jobRef, {
+                    applicants: increment(1)
+                });
+            } catch (counterError) {
+                console.warn("Could not increment applicant counter (non-critical):", counterError);
+            }
 
             setApplied(true);
             setShowModal(false);

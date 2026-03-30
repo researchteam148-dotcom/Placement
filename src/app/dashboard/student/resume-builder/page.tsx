@@ -54,7 +54,7 @@ const AIResumeBuilder = () => {
         const loadResume = async () => {
             if (!user || !resumeIdParam) return;
             try {
-                const docRef = doc(db, 'students', user.uid, 'savedResumes', resumeIdParam);
+                const docRef = doc(db, 'users', user.uid, 'savedResumes', resumeIdParam);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -86,9 +86,9 @@ const AIResumeBuilder = () => {
             try {
                 const dataToSave = { ...resumeData, template: selectedTemplate, lastUpdated: new Date() };
                 if (resumeId) {
-                    await updateDoc(doc(db, 'students', user.uid, 'savedResumes', resumeId), dataToSave);
+                    await updateDoc(doc(db, 'users', user.uid, 'savedResumes', resumeId), dataToSave);
                 } else {
-                    const docRef = await addDoc(collection(db, 'students', user.uid, 'savedResumes'), {
+                    const docRef = await addDoc(collection(db, 'users', user.uid, 'savedResumes'), {
                         ...dataToSave,
                         createdAt: new Date(),
                         name: resumeData.personal.name ? `${resumeData.personal.name}'s Resume` : 'Untitled Resume'

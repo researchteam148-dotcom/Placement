@@ -43,7 +43,7 @@ const ResumeHub = () => {
     useEffect(() => {
         const fetchStudentData = async () => {
             if (user) {
-                const studentDoc = await getDoc(doc(db, 'students', user.uid));
+                const studentDoc = await getDoc(doc(db, 'users', user.uid));
                 if (studentDoc.exists()) {
                     const data = studentDoc.data();
                     // We no longer auto-set resumeURL or analysisResult to ensure a fresh session on refresh
@@ -57,7 +57,7 @@ const ResumeHub = () => {
     // Fetch Saved Resumes Real-time
     useEffect(() => {
         if (!user) return;
-        const q = query(collection(db, 'students', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
+        const q = query(collection(db, 'users', user.uid, 'savedResumes'), orderBy('uploadedAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const resumes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setSavedResumes(resumes);
@@ -68,7 +68,7 @@ const ResumeHub = () => {
     // Fetch Analysis History Real-time
     useEffect(() => {
         if (!user) return;
-        const q = query(collection(db, 'students', user.uid, 'analysisHistory'), orderBy('analyzedAt', 'desc'));
+        const q = query(collection(db, 'users', user.uid, 'analysisHistory'), orderBy('analyzedAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const history = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setAnalysisHistory(history);
@@ -80,7 +80,7 @@ const ResumeHub = () => {
         if (!user) return;
         if (!confirm('Are you sure you want to delete this resume?')) return;
         try {
-            await deleteDoc(doc(db, 'students', user.uid, 'savedResumes', id));
+            await deleteDoc(doc(db, 'users', user.uid, 'savedResumes', id));
         } catch (error) {
             console.error("Error deleting resume:", error);
             alert("Failed to delete resume.");
@@ -124,11 +124,20 @@ const ResumeHub = () => {
                     const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
                     // Save URL to Firestore
-                    await setDoc(doc(db, 'students', user.uid), {
+                    await setDoc(doc(db, 'users', user.uid), {
                         resumeURL: downloadURL,
                         resumeFileName: file.name,
                         storageLocation: `resumes/${user.uid}/${file.name}` // Optional: track the storage path
                     }, { merge: true });
+
+                    // Add to savedResumes history list so it appears in the sidebar UI
+                    const { addDoc, collection } = await import('firebase/firestore');
+                    await addDoc(collection(db, 'users', user.uid, 'savedResumes'), {
+                        name: file.name,
+                        url: downloadURL,
+                        uploadedAt: new Date().toISOString(),
+                        size: (file.size / 1024 / 1024).toFixed(2) + ' MB'
+                    });
 
                     setResumeURL(downloadURL);
                     alert('Resume uploaded to Firebase Storage successfully!');
@@ -187,13 +196,13 @@ const ResumeHub = () => {
             const result = await response.json();
 
             // Save result to current student document
-            await updateDoc(doc(db, 'students', user.uid), {
+            await updateDoc(doc(db, 'users', user.uid), {
                 analysisResult: result
             });
 
             // IMPROVED: Save to analysis history
             const selectedResume = savedResumes.find(r => r.url === resumeURL);
-            await setDoc(doc(collection(db, 'students', user.uid, 'analysisHistory')), {
+            await setDoc(doc(collection(db, 'users', user.uid, 'analysisHistory')), {
                 resumeUrl: resumeURL,
                 resumeName: selectedResume?.name || 'Uploaded Resume',
                 analysisResult: result,

@@ -12,7 +12,7 @@ import {
     FileText
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { addDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 
@@ -72,12 +72,13 @@ const PostJobPage = () => {
 
         setLoading(true);
         try {
-            await addDoc(collection(db, 'jobs'), {
+            const companyName = user.role === 'admin' 
+                ? (selectedRecruiter?.companyName || selectedRecruiter?.name) 
+                : (user.companyName || user.name);
+
+            const jobRef = await addDoc(collection(db, 'jobs'), {
                 ...jobData,
-                // Use companyName from user profile for recruiters, or selected recruiter's companyName for admin
-                company: user.role === 'admin'
-                    ? (selectedRecruiter?.companyName || selectedRecruiter?.name)
-                    : (user.companyName || user.name),
+                company: companyName,
                 perks,
                 postedBy: user.role === 'admin' ? selectedRecruiter?.id : user.uid,
                 postedByName: user.role === 'admin' ? selectedRecruiter?.name : user.name,
@@ -85,7 +86,28 @@ const PostJobPage = () => {
                 type: 'On-Campus', // Keeps the main category as On-Campus
                 applicants: 0
             });
-            alert('Job posted successfully! Students can now see this opening.');
+
+            // Notify all students via batch write (in-app only)
+            const studentsQuery = query(collection(db, 'users'), where('role', '==', 'student'));
+            const studentsSnapshot = await getDocs(studentsQuery);
+            const batch = writeBatch(db);
+            const timestamp = new Date().toISOString();
+
+            studentsSnapshot.forEach((studentDoc) => {
+                const notifRef = doc(collection(db, 'users', studentDoc.id, 'notifications'));
+                batch.set(notifRef, {
+                    jobId: jobRef.id,
+                    title: jobData.title,
+                    company: companyName,
+                    status: 'New Job Alert',
+                    timestamp: timestamp,
+                    isRead: false
+                });
+            });
+
+            await batch.commit();
+
+            alert('Job posted successfully! Students have been notified.');
             // Reset form
             setJobData({
                 title: '',
@@ -220,11 +242,10 @@ const PostJobPage = () => {
                             <div className="relative group">
                                 <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" size={18} />
                                 <input
-                                    type="text"
+                                    type="date"
                                     value={jobData.deadline}
                                     onChange={(e) => setJobData({ ...jobData, deadline: e.target.value })}
-                                    placeholder="e.g. 30th Nov, 2026"
-                                    className="w-full pl-14 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
+                                    className="w-full pl-14 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold text-slate-700 block custom-date-input"
                                 />
                             </div>
                         </div>

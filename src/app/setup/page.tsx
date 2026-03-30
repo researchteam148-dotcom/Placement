@@ -52,7 +52,6 @@ export default function SetupPage() {
             // Step 2: Clear Firestore collections
             addLog('🗑️ Clearing Firestore data...');
             await clearFirestoreCollection('users');
-            await clearFirestoreCollection('students');
             await clearFirestoreCollection('jobs');
             addLog('  ✓ Firestore data cleared.');
 

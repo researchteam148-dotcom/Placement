@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, ExternalLink, CheckCircle2, XCircle, FileText } from 'lucide-react';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { formatDate } from '@/lib/utils';
@@ -13,6 +13,7 @@ const RecruiterApplicantsPage = () => {
     const [selectedJobId, setSelectedJobId] = useState<string>('all');
     const [applications, setApplications] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [updatingAppId, setUpdatingAppId] = useState<string | null>(null);
 
     // 1. Fetch Jobs posted by this recruiter (or all if admin) to populate filter
     useEffect(() => {
@@ -65,7 +66,8 @@ const RecruiterApplicantsPage = () => {
     }, [selectedJobId]);
 
     const handleUpdateStatus = async (appId: string, applicantId: string, newStatus: string) => {
-        if (!selectedJobId) return;
+        if (!selectedJobId || updatingAppId) return;
+        setUpdatingAppId(appId);
         try {
             // 1. Update in Job's subcollection
             const jobAppRef = doc(db, 'jobs', selectedJobId, 'applications', applicantId); // applicantId is docId in this subcol
@@ -75,6 +77,41 @@ const RecruiterApplicantsPage = () => {
             const userAppRef = doc(db, 'users', applicantId, 'applications', selectedJobId);
             await updateDoc(userAppRef, { status: newStatus });
 
+            // 3. Find application details
+            const targetApp = applications.find(a => a.id === appId);
+            if (targetApp) {
+                // 4. Create in-app notification in Firestore
+                const notificationId = doc(collection(db, 'users')).id; // Generate random ID securely
+                const notificationRef = doc(db, 'users', applicantId, 'notifications', notificationId);
+                
+                await setDoc(notificationRef, {
+                    jobId: selectedJobId,
+                    title: targetApp.title,
+                    company: targetApp.company,
+                    status: newStatus,
+                    timestamp: new Date().toISOString(),
+                    isRead: false
+                });
+
+                // 5. Trigger email via Resend API
+                try {
+                    await fetch('/api/notify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            email: targetApp.applicantEmail,
+                            name: targetApp.applicantName,
+                            company: targetApp.company,
+                            role: targetApp.title,
+                            status: newStatus
+                        })
+                    });
+                } catch (emailError) {
+                    console.error("Failed to send email notification:", emailError);
+                    // Do not fail the DB update if the email fails
+                }
+            }
+
             // Update local state
             setApplications(apps => apps.map(app =>
                 app.id === appId ? { ...app, status: newStatus } : app
@@ -82,6 +119,8 @@ const RecruiterApplicantsPage = () => {
         } catch (error) {
             console.error("Error updating status:", error);
             alert("Failed to update status");
+        } finally {
+            setUpdatingAppId(null);
         }
     };
 
@@ -208,24 +247,33 @@ const RecruiterApplicantsPage = () => {
                                                 </a>
                                             )}
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => handleUpdateStatus(app.id, app.applicantId, 'Shortlisted')}
-                                                title="Shortlist"
-                                                className="px-4 py-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors font-bold text-sm flex items-center gap-2"
-                                            >
-                                                <CheckCircle2 size={18} />
-                                                Shortlist
-                                            </button>
-                                            <button
-                                                onClick={() => handleUpdateStatus(app.id, app.applicantId, 'Rejected')}
-                                                title="Reject"
-                                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-bold text-sm flex items-center gap-2"
-                                            >
-                                                <XCircle size={18} />
-                                                Reject
-                                            </button>
-                                        </div>
+                                        {app.status === 'Pending' ? (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handleUpdateStatus(app.id, app.applicantId, 'Shortlisted')}
+                                                    disabled={updatingAppId === app.id}
+                                                    title="Shortlist"
+                                                    className="px-4 py-2 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors font-bold text-sm flex items-center gap-2"
+                                                >
+                                                    <CheckCircle2 size={18} />
+                                                    {updatingAppId === app.id ? 'Saving...' : 'Shortlist'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleUpdateStatus(app.id, app.applicantId, 'Rejected')}
+                                                    disabled={updatingAppId === app.id}
+                                                    title="Reject"
+                                                    className="px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors font-bold text-sm flex items-center gap-2"
+                                                >
+                                                    <XCircle size={18} />
+                                                    {updatingAppId === app.id ? 'Saving...' : 'Reject'}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 text-slate-400 bg-slate-50">
+                                                {app.status === 'Shortlisted' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                                                Decision Finalized
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}

@@ -45,10 +45,11 @@ export async function POST(request: NextRequest) {
                 { status: 404 }
             );
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error setting role:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to update role';
         return NextResponse.json(
-            { error: error.message || 'Failed to update role' },
+            { error: errorMessage },
             { status: 500 }
         );
     }

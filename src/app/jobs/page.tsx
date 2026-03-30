@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/layout/Navbar';
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
     Search,
@@ -44,18 +44,19 @@ const JobsPage = () => {
         if (jobsCache[cacheKey] && (Date.now() - jobsCache[cacheKey].timestamp < CACHE_DURATION)) {
             setJobs(jobsCache[cacheKey].data);
             setLoading(false);
-        } else {
-            setLoading(true); // Only show spinner if no cache or stale
+            return; // Cache is still fresh, skip fetching
         }
+        
+        setLoading(true);
 
-        // 2. Setup listener for updates (and to refresh cache)
+        // 2. Setup query for updates
         const typeFilter = activeTab === 'on-campus' ? 'On-Campus' : 'Off-Campus';
         const q = query(
             collection(db, 'jobs'),
             where('type', '==', typeFilter)
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        getDocs(q).then((snapshot) => {
             const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             // Client-side sort
@@ -72,19 +73,32 @@ const JobsPage = () => {
 
             // Reset page if we are on page 1, otherwise stick to current page unless out of bounds
             if (currentPage === 1) setCurrentPage(1);
-        }, (error) => {
+        }).catch((error) => {
             console.error("Error fetching jobs:", error);
             setLoading(false);
         });
-
-        return () => unsubscribe();
     }, [activeTab]);
 
     // Handle Manual Refresh
     const handleRefresh = async () => {
         setRefreshing(true);
         try {
-            await fetch('/api/jobs/scrape');
+            const response = await fetch('/api/jobs/scrape');
+            const data = await response.json();
+            
+            if (data.success && data.jobs) {
+                const { writeBatch, doc } = await import('firebase/firestore');
+                const batch = writeBatch(db);
+                data.jobs.forEach((job: any) => {
+                    const jobRef = doc(db, 'jobs', job.id);
+                    batch.set(jobRef, job, { merge: true });
+                });
+                await batch.commit();
+                
+                // Clear cache and trigger refetch
+                delete jobsCache[activeTab];
+                window.location.reload();
+            }
         } catch (error) {
             console.error("Refresh failed:", error);
         } finally {
@@ -117,12 +131,13 @@ const JobsPage = () => {
             // Check both old 'type' field (if it had values) and new 'employmentType' field
             // The job.type is likely 'On-Campus'/'Off-Campus', but job.employmentType should be 'Full-time', etc.
             // also checks if the type is in perks tags
-            const jobType = job.employmentType || job.type; // Fallback
-            const perks = job.perks || [];
+            const jobType = (job.employmentType || job.type || '').toLowerCase(); // Fallback
+            const perks = (job.perks || []).map((p: string) => p.toLowerCase());
 
-            const matchesType = selectedJobTypes.some(selected =>
-                jobType === selected || perks.includes(selected)
-            );
+            const matchesType = selectedJobTypes.some(selected => {
+                const s = selected.toLowerCase();
+                return jobType === s || perks.includes(s);
+            });
 
             if (!matchesType) return false;
         }
@@ -328,13 +343,23 @@ const JobsPage = () => {
                                                     <Clock size={16} /> {job.deadline || 'ASAP'}
                                                 </div>
                                             </div>
-                                            <Link
-                                                href={job.applyLink || `/jobs/${job.id}`}
-                                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black text-sm transition-all shadow-xl shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-1 active:scale-95 whitespace-nowrap"
-                                                target={activeTab === 'off-campus' ? '_blank' : '_self'}
-                                            >
-                                                {activeTab === 'off-campus' ? 'Apply Now' : 'View Details'}
-                                            </Link>
+                                            {activeTab === 'off-campus' ? (
+                                                <a
+                                                    href={job.applyLink || '#'}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black text-sm transition-all shadow-xl shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-1 active:scale-95 whitespace-nowrap"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                >
+                                                    Apply Now
+                                                </a>
+                                            ) : (
+                                                <Link
+                                                    href={`/jobs/${job.id}`}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black text-sm transition-all shadow-xl shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-1 active:scale-95 whitespace-nowrap"
+                                                >
+                                                    View Details
+                                                </Link>
+                                            )}
                                         </div>
                                     </div>
                                 </motion.div>

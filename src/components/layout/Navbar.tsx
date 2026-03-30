@@ -24,13 +24,33 @@ import {
     ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 const Navbar = () => {
     const { user, logout } = useAuth();
     const pathname = usePathname();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
     const router = useRouter();
+
+    React.useEffect(() => {
+        if (!user) {
+            setUnreadCount(0);
+            return;
+        }
+
+        const q = query(
+            collection(db, 'users', user.uid, 'notifications'),
+            where('isRead', '==', false)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setUnreadCount(snapshot.docs.length);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
 
     const handleLogout = async () => {
         try {
@@ -119,7 +139,11 @@ const Navbar = () => {
                             >
                                 <div className="relative">
                                     <Bell size={24} />
-                                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">3</span>
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white">
+                                            {unreadCount > 9 ? '9+' : unreadCount}
+                                        </span>
+                                    )}
                                 </div>
                                 <span className="text-[10px] font-medium mt-1 uppercase tracking-wider">Notifications</span>
                             </Link>
@@ -233,9 +257,16 @@ const Navbar = () => {
                                         <Link
                                             href="/notifications"
                                             onClick={() => setIsMobileMenuOpen(false)}
-                                            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 text-slate-600 hover:text-indigo-600 active:scale-95 transition-all"
+                                            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-50 text-slate-600 hover:text-indigo-600 active:scale-95 transition-all relative"
                                         >
-                                            <Bell size={24} />
+                                            <div className="relative">
+                                                <Bell size={24} />
+                                                {unreadCount > 0 && (
+                                                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                                                        {unreadCount}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <span className="text-xs font-bold mt-2">Notifications</span>
                                         </Link>
                                         <Link

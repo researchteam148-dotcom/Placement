@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { doc, writeBatch } from 'firebase/firestore';
 
 export async function GET() {
     try {
@@ -37,15 +35,7 @@ export async function GET() {
             };
         });
 
-        // Batch write to Firestore
-        const batch = writeBatch(db);
-        jobs.forEach((job: any) => {
-            const jobRef = doc(db, 'jobs', job.id);
-            batch.set(jobRef, job, { merge: true });
-        });
-        await batch.commit();
-
-        return NextResponse.json({ success: true, count: jobs.length, source: 'jsearch-api-cached' });
+        return NextResponse.json({ success: true, jobs, count: jobs.length, source: 'jsearch-api-cached' });
 
     } catch (error: any) {
         console.error('JSearch API failed:', error);

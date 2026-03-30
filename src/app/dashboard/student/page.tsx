@@ -27,7 +27,7 @@ const StudentDashboard = () => {
             if (!user) return;
             try {
                 // 1. Fetch student profile data (has skills array)
-                const studentDoc = await getDoc(doc(db, 'students', user.uid));
+                const studentDoc = await getDoc(doc(db, 'users', user.uid));
                 const studentData = studentDoc.exists() ? studentDoc.data() : null;
 
                 // 2. Extract keywords from skills
@@ -146,7 +146,7 @@ const StudentDashboard = () => {
 
                 // Fetch Profile Score
                 let profileScore = 0;
-                const studentDoc = await getDoc(doc(db, 'students', user.uid));
+                const studentDoc = await getDoc(doc(db, 'users', user.uid));
                 if (studentDoc.exists()) {
                     profileScore = studentDoc.data().analysisResult?.score || 0;
                 }

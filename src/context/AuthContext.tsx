@@ -100,15 +100,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (userDoc.exists()) {
                         const userData = userDoc.data() as User;
                         setUser(userData);
-                    } else if (!authActionInProgress.current) {
-                        // Only auto-create document if NO auth action is in progress.
-                        // During signup, the signUpWithEmail handler creates the document
-                        // with the correct role. We must not race against it.
-                        const newUser = await createUserDocument(firebaseUser, 'student');
-                        setUser(newUser);
+                    } else {
+                        // Document doesn't exist yet (e.g., during the middle of sign-up flow).
+                        // Do not auto-create it here; let the sign-up handler do it explicitly.
+                        // We will rely on signin/signup functions to call setUser.
                     }
-                    // If authActionInProgress is true and doc doesn't exist,
-                    // skip — the signup handler will create it with the correct role.
                 } else {
                     setUser(null);
                 }
