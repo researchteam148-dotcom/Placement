@@ -49,6 +49,17 @@ const RegisterContent = () => {
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        if (role === 'student') {
+            const allowedDomains = ['aec.edu.in', 'acet.ac.in', 'adityauniversity.in'];
+            const emailDomain = formData.email.split('@')[1];
+
+            if (!emailDomain || !allowedDomains.includes(emailDomain.toLowerCase())) {
+                setError('Please use a valid university email (@aec.edu.in, @acet.ac.in, or @adityauniversity.in).');
+                return;
+            }
+        }
+
         setIsSubmitting(true);
         try {
             await signUpWithEmail(
